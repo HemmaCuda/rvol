@@ -2,6 +2,8 @@ import pandas as pd
 from qpython import qconnection
 import datetime
 
+# Bugs
+
 
 class Vol(object):
 
@@ -15,7 +17,7 @@ class Vol(object):
     def volume_pace(self):
 
         now = datetime.datetime.now().time()
-        now = (now.replace(minute=(15 * (now.minute // 15)))
+        now = (now.replace(minute=(5 * (now.minute // 5)))
                .strftime('%H:%M'))
 
         yday = datetime.datetime.now() - datetime.timedelta(days=1)
@@ -24,7 +26,7 @@ class Vol(object):
         start = _.min().strftime('%Y.%m.%d')
         stop = _.max().strftime('%Y.%m.%d')
 
-        df = self.q('select sum volume by 0D00:15:00 xbar utc_datetime '
+        df = self.q('select sum volume by 0D00:05:00 xbar ltime utc_datetime '
                     'from trade where date within ({}; {}),'
                     'sym = `$"{}"'.format(start, stop, self.sym))
         cumsum = df.groupby(pd.Grouper(freq='D'))['volume'].cumsum()

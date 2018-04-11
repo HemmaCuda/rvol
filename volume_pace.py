@@ -72,14 +72,19 @@ class Vol(object):
             try:
 
                 df = Vol.q('select sum volume by date from '
-                           'trade where date within ({}; {}),'
-                           'base = `$"{}", (`time$utc_datetime) < (`time$.z.z),'
-                           'not sym like "*-*"'
+                           'trade where date within ({}; {}), base = `$"{}", '
+                           '(`time$utc_datetime) < (`time$.z.z),'
+                           'not sym like "*-*", ((`time$(ltime utc_datetime))'
+                           'within ((`time$07:00:00); (`time$15:00:00)))'
                            .format(start, stop, i))
 
-                tday_cum = Vol.rdb('select sum volume by `date$utc_datetime from '
-                                   'bar where (`date$utc_datetime) = (`date$.z.z),'
-                                   ' base = `$"{}", not sym like "*-*"'.format(i))
+                tday_cum = Vol.rdb('select sum volume by `date$utc_datetime'
+                                   ' from bar where (`date$utc_datetime)'
+                                   ' = (`date$.z.z),'
+                                   ' base = `$"{}", not sym like "*-*", '
+                                   '((`time$(ltime utc_datetime)) within (('
+                                   '`time$07:00:00); (`time$15:00:00)))'
+                                   .format(i))
 
                 tday_cum = tday_cum['volume'].sum()
 
@@ -100,11 +105,11 @@ class Vol(object):
         Rvol20d_sort = sorted(Rvol20d, key=Rvol20d.get)
 
         print('Rvol:')
-        for i in Rvol_sort[-10:-1]:
+        for i in Rvol_sort:
             print(i, Rvol[i])
 
         print('Rvol20:')
-        for i in Rvol20d_sort[-10:-1]:
+        for i in Rvol20d_sort:
             print(i, Rvol20d[i])
 
     def compare(self, base=None):
@@ -230,7 +235,8 @@ class Vol(object):
 
         for i in syms:
 
-            df = Vol.q('select high, low from dailybar where date = {}, sym = {}'
+            df = Vol.q('select high, low from dailybar where date = {},'
+                       ' sym = {}'
                        .format(_, i))
 
 

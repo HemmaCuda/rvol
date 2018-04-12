@@ -1,9 +1,13 @@
 import pandas as pd
 from qpython import qconnection
 import datetime
+import time
+import pickle
+import os
 
 # Bugs
 # If realtime crashes this is fucked for the day
+# Pickle version breaks Rvol20, need to rewrite query
 
 # Performance
 # ltime slows this script down 10x (1s to 10s)
@@ -53,6 +57,11 @@ class Vol(object):
         today = datetime.datetime.now()
         yday = today - datetime.timedelta(days=1)
 
+        now = today.time()
+
+        now = (now.replace(minute=(5 * (now.minute // 5)))
+               .strftime('%H:%M'))
+
         _ = pd.date_range(end=yday, periods=20, freq='B')
         start = _.min().strftime('%Y.%m.%d')
         stop = _.max().strftime('%Y.%m.%d')
@@ -66,40 +75,76 @@ class Vol(object):
 
         Rvol = dict()
         Rvol20d = dict()
+        df = dict()
+
+        filepath = 'volume_pace.pickle'
+
+        if os.path.exists(filepath):
+
+            get_file_date = time.ctime(os.path.getctime(filepath))
+
+            file_date = datetime.datetime.strptime(
+                get_file_date, "%a %b %d %H:%M:%S %Y").date()
+
+            if file_date == today.date():
+
+                with open(filepath, 'rb') as f:
+                    df = pickle.load(f)
+
+            else:
+
+                for i in bases:
+
+                    df[i] = Vol.q('select sum volume by 0D00:05:00 xbar'
+                                  ' ltime utc_datetime '
+                                  'from trade where date within ({}; {}),'
+                                  'base = `$"{}", not sym like "*-*", '
+                                  '((`time$(ltime utc_datetime)) within '
+                                  '((`time$07:00:00); (`time$15:00:00)))'
+                                  .format(start, stop, i))
+
+                with open(filepath, 'wb') as f:
+                    pickle.dump(df, f)
+
+        else:
+
+            for i in bases:
+
+                df[i] = Vol.q('select sum volume by 0D00:05:00 xbar'
+                              ' ltime utc_datetime '
+                              'from trade where date within ({}; {}),'
+                              'base = `$"{}", not sym like "*-*", '
+                              '((`time$(ltime utc_datetime)) within '
+                              '((`time$07:00:00); (`time$15:00:00)))'
+                              .format(start, stop, i))
+
+            with open(filepath, 'wb') as f:
+                pickle.dump(df, f)
+
+        # Calculate
 
         for i in bases:
 
-            try:
+            _ = Vol.rdb('select sum volume by `date$utc_datetime'
+                        ' from bar where (`date$utc_datetime)'
+                        ' = (`date$.z.z),'
+                        ' base = `$"{}", not sym like "*-*", '
+                        '((`time$(ltime utc_datetime)) within (('
+                        '`time$07:00:00); (`time$15:00:00)))'
+                        .format(i))
 
-                df = Vol.q('select sum volume by date from '
-                           'trade where date within ({}; {}), base = `$"{}", '
-                           '(`time$utc_datetime) < (`time$.z.z),'
-                           'not sym like "*-*", ((`time$(ltime utc_datetime))'
-                           'within ((`time$07:00:00); (`time$15:00:00)))'
-                           .format(start, stop, i))
+            tday_cum = _['volume'].sum()
 
-                tday_cum = Vol.rdb('select sum volume by `date$utc_datetime'
-                                   ' from bar where (`date$utc_datetime)'
-                                   ' = (`date$.z.z),'
-                                   ' base = `$"{}", not sym like "*-*", '
-                                   '((`time$(ltime utc_datetime)) within (('
-                                   '`time$07:00:00); (`time$15:00:00)))'
-                                   .format(i))
+            cut = df[i].loc[df[i].index.strftime('%H:%M') < now]
 
-                tday_cum = tday_cum['volume'].sum()
+            cumsum = cut.groupby(pd.Grouper(freq='D'))['volume'].cumsum()
 
-                hist_mean = df['volume'].mean()
+            yday_vol = cumsum[-1]
 
-                Rvol[i] = round(tday_cum / df['volume'][-1], 2)
-                Rvol20d[i] = round(tday_cum / hist_mean, 2)
+            hist_mean = cumsum.mean()
 
-            except KeyError:
-
-                pass
-
-            except IndexError:
-
-                pass
+            Rvol[i] = round(tday_cum / yday_vol, 2)
+            Rvol20d[i] = round(tday_cum / hist_mean, 2)
 
         Rvol_sort = sorted(Rvol, key=Rvol.get)
         Rvol20d_sort = sorted(Rvol20d, key=Rvol20d.get)
@@ -136,10 +181,6 @@ class Vol(object):
 
         print(new)
         print(old)
-
-    def delta(self):
-
-        df = Vol.q('select ')
 
     def get_front_months():
         """This code needs to be run once everyday at 5pm"""

@@ -137,7 +137,9 @@ class Vol(object):
 
             cut = df[i].loc[df[i].index.strftime('%H:%M') < now]
 
-            cumsum = cut.groupby(pd.Grouper(freq='D'))['volume'].cumsum()
+            cumsum = cut.groupby(pd.Grouper(freq='D'))['volume'].sum()
+
+            cumsum = cumsum[cumsum != 0]
 
             yday_vol = cumsum[-1]
 

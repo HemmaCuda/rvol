@@ -12,7 +12,6 @@ from multiprocessing import Pool
 # Rvol logic breaks after 3pm
 # Need to estimate the days range in prices
 # Need to be alerted to which products are near highs/lows
-# Need to be alerted if we're outside of yesterday's range
 # Need to be alerts to an opening gap in prices
 
 # check bars in a day to verify data integrity, throw out if not
@@ -431,82 +430,67 @@ class Vol(object):
 
         yo, yh, yl, yc = Vol.yday_ohlc(sym)
 
-        print(yo, yh, yl, yc)
-
         # Initialize state
 
         test_yh = 0
         test_yl = 0
 
-        def upd_test_yh(test_yh, price, yh):
+        def upd_test_yh(test_yh, price, yh, **kwargs):
 
             if test_yh is 0 and price > yh:
 
                 test_yh = 1
 
-                return test_yh
+                dispatcher.pop(upd_test_yh)
 
-            else:
-
-                return test_yh
-
-        def upd_test_yl(test_yl, price, yl):
+        def upd_test_yl(test_yl, price, yl, **kwargs):
 
             if test_yl is 0 and price < yl:
 
                 test_yl = 1
 
-                return test_yl
+                dispatcher.pop(upd_test_yl)
 
-            else:
+        def single_outside_rvol(rvol, test_yh, test_yl, **kwargs):
 
-                return test_yl
-
-        def single_outside_rvol(rvol, test_yh, test_yl):
-
-            if (rvol > 1) and (test_yh or test_yl):
+            if (rvol > 1.4) and (test_yh or test_yl):
 
                 body = 'single_outside_rvol'
 
                 Vol.send_sms(sym, body)
 
-                return 1
+                dispatcher.pop(single_outside_rvol)
 
-            else:
+        def double_outside_rvol(rvol, test_yh, test_yl, **kwargs):
 
-                return 0
-
-        def double_outside_rvol(rvol, test_yh, test_yl):
-
-            if (rvol > 1) and (test_yh + test_yl == 2):
+            if (rvol > 1.4) and (test_yh + test_yl == 2):
 
                 body = 'double_outside_rvol'
 
                 Vol.send_sms(sym, body)
 
-                return 1
-
-            else:
-
-                return 0
+                dispatcher.pop(double_outside_rvol)
 
         print('Monitoring:', sym)
 
         # Main loop
+
+        dispatcher = [upd_test_yh,
+                      upd_test_yl,
+                      single_outside_rvol,
+                      double_outside_rvol]
 
         while True:
 
             # Update state
 
             price = Vol.upd_price(sym)
-            test_yh = upd_test_yh(test_yh, price, yh)
-            test_yl = upd_test_yl(test_yl, price, yl)
             rvol, rvol20d = Vol.upd_rvol(base)
 
             # Generate alerts
 
-            single_outside_rvol(rvol, test_yh, test_yl)
-            double_outside_rvol(rvol, test_yh, test_yl)
+            for i in dispatcher:
+                i(**locals())
 
             time.sleep(301)
 

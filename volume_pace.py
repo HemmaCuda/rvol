@@ -41,6 +41,9 @@ class Vol(object):
 
         Vol.init_rvol(self)
 
+        with open('rvol.pickle', 'rb') as f:
+            self.df = pickle.load(f)
+
     def q(query=None):
         """connect to kdb"""
 
@@ -129,11 +132,6 @@ class Vol(object):
         Rvol = dict()
         Rvol20d = dict()
 
-        filepath = 'rvol.pickle'
-
-        with open(filepath, 'rb') as f:
-            df = pickle.load(f)
-
         # Calculate
 
         for i in self.bases:
@@ -156,7 +154,7 @@ class Vol(object):
 
                 print(i, 'ValueError')
 
-            cut = df[i].loc[df[i].index.strftime('%H:%M') < now]
+            cut = self.df[i].loc[self.df[i].index.strftime('%H:%M') < now]
 
             cumsum = cut.groupby(pd.Grouper(freq='D'))['volume'].sum()
 
@@ -192,7 +190,7 @@ class Vol(object):
         for i in Rvol20d_sort:
             print(i, Rvol20d[i])
 
-    def upd_rvol(base):
+    def upd_rvol(base, df):
 
         # Multi threaded
 
@@ -200,11 +198,6 @@ class Vol(object):
 
         now = (now.replace(minute=(5 * (now.minute // 5)))
                .strftime('%H:%M'))
-
-        filepath = 'rvol.pickle'
-
-        with open(filepath, 'rb') as f:
-            df = pickle.load(f)
 
         # Calculate
 
@@ -218,7 +211,7 @@ class Vol(object):
 
         tday_cum = _['volume'].sum()
 
-        cut = df[base].loc[df[base].index.strftime('%H:%M') < now]
+        cut = df.loc[df.index.strftime('%H:%M') < now]
 
         cumsum = cut.groupby(pd.Grouper(freq='D'))['volume'].sum()
 
@@ -373,9 +366,9 @@ class Vol(object):
 
         # Test updates for real time
 
-        assert df.index.date[0] == datetime.datetime.now().date()
-        assert df.index.time[0].hour == datetime.datetime.now().time().hour
-        assert df.index.time[0].minute == datetime.datetime.now().time().minute
+        #assert df.index.date[0] == datetime.datetime.now().date()
+        #assert df.index.time[0].hour == datetime.datetime.now().time().hour
+        #assert df.index.time[0].minute == datetime.datetime.now().time().minute
 
         # Write tests for historical
 
@@ -392,7 +385,10 @@ class Vol(object):
         x = list()
 
         for k, v in basesyms.items():
-            x.append({k: v})
+            x.append({'base': k, 'sym': v})
+
+        for i in x:
+            i['df'] = self.df[i['base']]
 
         # Multiprocessing
 
@@ -425,8 +421,9 @@ class Vol(object):
 
         # Probably need to check exchange status somewhere
 
-        base = str(*basesym)
-        sym = basesym[base]
+        base = basesym['base']
+        sym = basesym['sym']
+        df = basesym['df']
 
         yo, yh, yl, yc = Vol.yday_ohlc(sym)
 
@@ -435,41 +432,47 @@ class Vol(object):
         test_yh = 0
         test_yl = 0
 
-        def upd_test_yh(test_yh, price, yh, **kwargs):
+        def upd_test_yh():
 
-            if test_yh is 0 and price > yh:
+            if price > yh:
 
+                nonlocal test_yh
                 test_yh = 1
 
-                dispatcher.pop(upd_test_yh)
+                dispatcher.remove(upd_test_yh)
 
-        def upd_test_yl(test_yl, price, yl, **kwargs):
+        def upd_test_yl():
 
-            if test_yl is 0 and price < yl:
+            if price < yl:
 
+                nonlocal test_yl
                 test_yl = 1
 
-                dispatcher.pop(upd_test_yl)
+                dispatcher.remove(upd_test_yl)
 
-        def single_outside_rvol(rvol, test_yh, test_yl, **kwargs):
+        def single_outside_rvol():
 
-            if (rvol > 1.4) and (test_yh or test_yl):
+            if (rvol > 1.0) and (test_yh or test_yl):
 
                 body = 'single_outside_rvol'
 
-                Vol.send_sms(sym, body)
+                # Vol.send_sms(sym, body)
 
-                dispatcher.pop(single_outside_rvol)
+                print(sym, body)
 
-        def double_outside_rvol(rvol, test_yh, test_yl, **kwargs):
+                dispatcher.remove(single_outside_rvol)
 
-            if (rvol > 1.4) and (test_yh + test_yl == 2):
+        def double_outside_rvol():
+
+            if (rvol > 1.0) and (test_yh + test_yl == 2):
 
                 body = 'double_outside_rvol'
 
-                Vol.send_sms(sym, body)
+                # Vol.send_sms(sym, body)
 
-                dispatcher.pop(double_outside_rvol)
+                print(sym, body)
+
+                dispatcher.remove(double_outside_rvol)
 
         print('Monitoring:', sym)
 
@@ -485,14 +488,14 @@ class Vol(object):
             # Update state
 
             price = Vol.upd_price(sym)
-            rvol, rvol20d = Vol.upd_rvol(base)
+            rvol, rvol20d = Vol.upd_rvol(base, df)
 
             # Generate alerts
 
             for i in dispatcher:
-                i(**locals())
+                i()
 
-            time.sleep(301)
+            time.sleep(15)
 
 
 if __name__ == '__main__':

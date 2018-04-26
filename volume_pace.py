@@ -1,11 +1,14 @@
-import pandas as pd
-from qpython import qconnection
+"""docstring"""
+
+import random
 import datetime
 import time
 import pickle
 import os
-from twilio.rest import Client
 from multiprocessing import Pool
+from twilio.rest import Client
+import pandas as pd
+from qpython import qconnection
 
 # Bugs
 # If realtime crashes this is fucked for the day
@@ -30,6 +33,7 @@ from multiprocessing import Pool
 
 
 class Vol(object):
+    """docstring"""
 
     def __init__(self):
 
@@ -41,25 +45,25 @@ class Vol(object):
 
         Vol.init_rvol(self)
 
-        with open('rvol.pickle', 'rb') as f:
-            self.df = pickle.load(f)
+        with open('rvol.pickle', 'rb') as file:
+            self.kdb_data = pickle.load(file)
 
-    def q(query=None):
+    @classmethod
+    def kdb(cls, query=None):
         """connect to kdb"""
 
-        q = qconnection.QConnection('kdb.genevatrading.com', 8000,
-                                    pandas=True)
-        q.open()
+        kdb = qconnection.QConnection('kdb.genevatrading.com', 8000,
+                                      pandas=True)
+        kdb.open()
 
         if query is None:
 
-            return q
+            return kdb
 
-        else:
+        return kdb(query)
 
-            return q(query)
-
-    def rdb(query=None):
+    @classmethod
+    def rdb(cls, query=None):
         """Connect to rdb"""
 
         rdb = qconnection.QConnection('kdb.genevatrading.com', 9218,
@@ -70,11 +74,10 @@ class Vol(object):
 
             return rdb
 
-        else:
-
-            return rdb(query)
+        return rdb(query)
 
     def init_rvol(self):
+        """docstring"""
 
         today = datetime.datetime.now()
         yday = today - datetime.timedelta(days=1)
@@ -90,7 +93,7 @@ class Vol(object):
 
         filepath = 'rvol.pickle'
 
-        df = dict()
+        kdb_data = dict()
 
         if os.path.exists(filepath):
 
@@ -107,20 +110,21 @@ class Vol(object):
 
             for i in self.bases:
 
-                df[i] = Vol.q('select sum volume by 0D00:05:00 xbar'
-                              ' ltime utc_datetime '
-                              'from trade where date within ({}; {}),'
-                              'base = `$"{}", not sym like "*-*", '
-                              '((`time$(ltime utc_datetime)) within '
-                              '((`time$07:00:00); (`time$15:00:00)))'
-                              .format(start, stop, i))
+                kdb_data[i] = Vol.kdb('select sum volume by 0D00:05:00 xbar'
+                                      ' ltime utc_datetime '
+                                      'from trade where date within ({}; {}),'
+                                      'base = `$"{}", not sym like "*-*", '
+                                      '((`time$(ltime utc_datetime)) within '
+                                      '((`time$07:00:00); (`time$15:00:00)))'
+                                      .format(start, stop, i))
 
                 print('Initializing Rvol:', i)
 
-        with open(filepath, 'wb') as f:
-            pickle.dump(df, f)
+        with open(filepath, 'wb') as file:
+            pickle.dump(kdb_data, file)
 
     def prnt_rvol(self):
+        """docstring"""
 
         # Single threaded
 
@@ -129,8 +133,8 @@ class Vol(object):
         now = (now.replace(minute=(5 * (now.minute // 5)))
                .strftime('%H:%M'))
 
-        Rvol = dict()
-        Rvol20d = dict()
+        rvol = dict()
+        rvol20d = dict()
 
         # Calculate
 
@@ -154,7 +158,8 @@ class Vol(object):
 
                 print(i, 'ValueError')
 
-            cut = self.df[i].loc[self.df[i].index.strftime('%H:%M') < now]
+            cut = self.kdb_data[i].loc[
+                self.kdb_data[i].index.strftime('%H:%M') < now]
 
             cumsum = cut.groupby(pd.Grouper(freq='D'))['volume'].sum()
 
@@ -174,23 +179,25 @@ class Vol(object):
 
             hist_mean = cumsum.mean()
 
-            Rvol[i] = round((tday_cum / yday_vol), 2)
-            Rvol20d[i] = round((tday_cum / hist_mean), 2)
+            rvol[i] = round((tday_cum / yday_vol), 2)
+            rvol20d[i] = round((tday_cum / hist_mean), 2)
 
-        Rvol_sort = sorted(Rvol, key=Rvol.get)
-        Rvol20d_sort = sorted(Rvol20d, key=Rvol20d.get)
+        rvol_sort = sorted(rvol, key=rvol.get)
+        rvol20d_sort = sorted(rvol20d, key=rvol20d.get)
 
         print('Rvol:')
-        for i in Rvol_sort:
-            print(i, Rvol[i])
+        for i in rvol_sort:
+            print(i, rvol[i])
 
         print('')
 
         print('Rvol20:')
-        for i in Rvol20d_sort:
-            print(i, Rvol20d[i])
+        for i in rvol20d_sort:
+            print(i, rvol20d[i])
 
-    def upd_rvol(base, df):
+    @classmethod
+    def upd_rvol(cls, base, kdb_data):
+        '''docstring'''
 
         # Multi threaded
 
@@ -211,7 +218,7 @@ class Vol(object):
 
         tday_cum = _['volume'].sum()
 
-        cut = df.loc[df.index.strftime('%H:%M') < now]
+        cut = kdb_data.loc[kdb_data.index.strftime('%H:%M') < now]
 
         cumsum = cut.groupby(pd.Grouper(freq='D'))['volume'].sum()
 
@@ -236,7 +243,9 @@ class Vol(object):
 
         return rvol, rvol20d
 
-    def compare(self, base=None):
+    @classmethod
+    def compare(cls, base=None):
+        """docstring"""
 
         # Not finished
 
@@ -254,11 +263,11 @@ class Vol(object):
                       ' utc_datetime from bar where (`date$utc_datetime)'
                       ' = (`date$.z.z), base = `$"{}"'.format(base))
 
-        old = Vol.q('-1# select sum volume by 0D00:05:00 xbar'
-                    ' utc_datetime from trade where date = {},'
-                    ' (`time$utc_datetime) < (`time$.z.z),'
-                    ' base = `$"{}"'
-                    .format(_, base))
+        old = Vol.kdb('-1# select sum volume by 0D00:05:00 xbar'
+                      ' utc_datetime from trade where date = {},'
+                      ' (`time$utc_datetime) < (`time$.z.z),'
+                      ' base = `$"{}"'
+                      .format(_, base))
 
         print(new)
         print(old)
@@ -282,9 +291,9 @@ class Vol(object):
 
         for i in self.bases:
 
-            _ = Vol.q('select date, sym from dailybar where date = {},'
-                      'base = `{}, volume = max volume, not sym like '
-                      '"*-*"'.format(yday_str, i))
+            _ = Vol.kdb('select date, sym from dailybar where date = {},'
+                        'base = `{}, volume = max volume, not sym like '
+                        '"*-*"'.format(yday_str, i))
 
             while _.empty:
 
@@ -293,9 +302,9 @@ class Vol(object):
 
                 count += 1
 
-                _ = Vol.q('select date, sym from dailybar where date = {},'
-                          'base = `{}, volume = max volume, not sym like '
-                          '"*-*"'.format(temp, i))
+                _ = Vol.kdb('select date, sym from dailybar where date = {},'
+                            'base = `{}, volume = max volume, not sym like '
+                            '"*-*"'.format(temp, i))
 
                 # Try a max of 5 days
 
@@ -339,40 +348,49 @@ class Vol(object):
 
         return basesyms
 
-    def yday_ohlc(sym):
+    @classmethod
+    def yday_ohlc(cls, sym):
+        """docstring"""
 
         # assumes last row in dailybar is last trade day
 
-        _ = Vol.q('-1# select date, open, high, low, close'
-                  ' from dailybar where sym = `$"{}"'
-                  .format(sym))
+        _ = Vol.kdb('-1# select date, open, high, low, close'
+                    ' from dailybar where sym = `$"{}"'
+                    .format(sym))
 
-        yo = _['open'].item()
-        yh = _['high'].item()
-        yl = _['low'].item()
-        yc = _['close'].item()
+        yday_ohlc = dict()
 
-        return yo, yh, yl, yc
+        yday_ohlc['yo'] = _['open'].item()
+        yday_ohlc['yh'] = _['high'].item()
+        yday_ohlc['yl'] = _['low'].item()
+        yday_ohlc['yc'] = _['close'].item()
 
-    def upd_price(sym):
+        return yday_ohlc
+
+    @classmethod
+    def upd_price(cls, sym):
+        """docstring"""
 
         return Vol.rdb('-1# select close from bar where sym ='
                        '`$"{}"'.format(sym))['close'].item()
 
-    def test_rdb():
+    @classmethod
+    def test_rdb(cls):
+        """docstring"""
 
-        df = Vol.rdb('-1# select close by ltime utc_datetime from bar'
-                     ' where base = `ES')
+        _ = Vol.rdb('-1# select close by ltime utc_datetime from bar'
+                    ' where base = `ES')
 
         # Test updates for real time
 
-        #assert df.index.date[0] == datetime.datetime.now().date()
-        #assert df.index.time[0].hour == datetime.datetime.now().time().hour
-        #assert df.index.time[0].minute == datetime.datetime.now().time().minute
+        assert _.index.date[0] == datetime.datetime.now().date()
+        assert _.index.time[0].hour == datetime.datetime.now().time().hour
+        assert _.index.time[0].minute == datetime.datetime.now().time().minute
 
         # Write tests for historical
 
     def start(self):
+        """docstring"""
 
         # Run tests
 
@@ -382,22 +400,24 @@ class Vol(object):
 
         basesyms = Vol.get_front_months(self)
 
-        x = list()
+        wrkr_args = list()
 
-        for k, v in basesyms.items():
-            x.append({'base': k, 'sym': v})
+        for key, value in basesyms.items():
+            wrkr_args.append({'base': key, 'sym': value})
 
-        for i in x:
-            i['df'] = self.df[i['base']]
+        for i in wrkr_args:
+            i['kdb_data'] = self.kdb_data[i['base']]
 
         # Multiprocessing
 
-        p = Pool(len(x))
-        p.map(Vol.workers, x)
-        p.close()
-        p.join()
+        pool = Pool(len(wrkr_args))
+        pool.map(Vol.workers, wrkr_args)
+        pool.close()
+        pool.join()
 
-    def send_sms(sym, body):
+    @classmethod
+    def send_sms(cls, sym, body):
+        """docstring"""
 
         # Send Text
 
@@ -417,15 +437,13 @@ class Vol(object):
                 body="{}, {}, {}".format(
                     datetime.datetime.now().time(), sym, body))
 
-    def workers(basesym):
+    @classmethod
+    def workers(cls, wrkr_args):
+        """docstring"""
 
         # Probably need to check exchange status somewhere
 
-        base = basesym['base']
-        sym = basesym['sym']
-        df = basesym['df']
-
-        yo, yh, yl, yc = Vol.yday_ohlc(sym)
+        yday_ohlc = Vol.yday_ohlc(wrkr_args['sym'])
 
         # Initialize state
 
@@ -433,8 +451,9 @@ class Vol(object):
         test_yl = 0
 
         def upd_test_yh():
+            """docstring"""
 
-            if price > yh:
+            if price > yday_ohlc['yh']:
 
                 nonlocal test_yh
                 test_yh = 1
@@ -442,8 +461,9 @@ class Vol(object):
                 dispatcher.remove(upd_test_yh)
 
         def upd_test_yl():
+            """docstring"""
 
-            if price < yl:
+            if price < yday_ohlc['yl']:
 
                 nonlocal test_yl
                 test_yl = 1
@@ -451,30 +471,32 @@ class Vol(object):
                 dispatcher.remove(upd_test_yl)
 
         def single_outside_rvol():
+            """docstring"""
 
-            if (rvol > 1.0) and (test_yh or test_yl):
+            if (rvol20d > 1.0) and (test_yh or test_yl):
 
                 body = 'single_outside_rvol'
 
                 # Vol.send_sms(sym, body)
 
-                print(sym, body)
+                print(wrkr_args['sym'], body)
 
                 dispatcher.remove(single_outside_rvol)
 
         def double_outside_rvol():
+            """docstring"""
 
-            if (rvol > 1.0) and (test_yh + test_yl == 2):
+            if (rvol20d > 1.0) and (test_yh + test_yl == 2):
 
                 body = 'double_outside_rvol'
 
                 # Vol.send_sms(sym, body)
 
-                print(sym, body)
+                print(wrkr_args['sym'], body)
 
                 dispatcher.remove(double_outside_rvol)
 
-        print('Monitoring:', sym)
+        print('Monitoring:', wrkr_args['sym'])
 
         # Main loop
 
@@ -487,18 +509,19 @@ class Vol(object):
 
             # Update state
 
-            price = Vol.upd_price(sym)
-            rvol, rvol20d = Vol.upd_rvol(base, df)
+            price = Vol.upd_price(wrkr_args['sym'])
+            rvol, rvol20d = Vol.upd_rvol(
+                wrkr_args['base'], wrkr_args['kdb_data'])
 
             # Generate alerts
 
             for i in dispatcher:
                 i()
 
-            time.sleep(15)
+            time.sleep(random.randint(5, 25))
 
 
 if __name__ == '__main__':
 
     ex = Vol()
-    ex.start()
+    ex.prnt_rvol()

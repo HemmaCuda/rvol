@@ -102,11 +102,7 @@ class Vol(object):
             file_date = datetime.datetime.strptime(
                 get_file_date, "%a %b %d %H:%M:%S %Y").date()
 
-            if file_date == today.date():
-
-                return
-
-        else:
+        if not os.path.exists(filepath) or file_date != today.date():
 
             for i in self.bases:
 

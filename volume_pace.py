@@ -116,8 +116,8 @@ class Vol(object):
 
                 print('Initializing Rvol:', i)
 
-        with open(filepath, 'wb') as file:
-            pickle.dump(kdb_data, file)
+            with open(filepath, 'wb') as file:
+                pickle.dump(kdb_data, file)
 
     def prnt_rvol(self):
         """docstring"""
@@ -239,8 +239,7 @@ class Vol(object):
 
         return rvol, rvol20d
 
-    @classmethod
-    def rvol_now(cls, base=None):
+    def rvol_now(self):
         """I have an idea to make this a real time Rvol (noncum)
         What I want is to see the 20d 15m bars vs today"""
 
@@ -251,33 +250,53 @@ class Vol(object):
         start = _.min().strftime('%Y.%m.%d')
         stop = _.max().strftime('%Y.%m.%d')
 
+        td_15m = dict()
+        avg_15m_20d = dict()
+        rvol_now = dict()
+
         while True:
 
-            tday_15m = Vol.rdb('-1# select sum volume from bar where '
-                               '(`date$utc_datetime) = (`date$.z.z), '
-                               'base = `$"{}", not sym like "*-*",'
-                               ' (`time$utc_datetime) < (`time$.z.z),'
-                               ' (`time$utc_datetime) > ((`time$.z.z) '
-                               '- 00:15:00)'
-                               .format(base))
+            for base in self.bases:
 
-            tday_15m = tday_15m['volume'].item()
+                td_15m[base] = Vol.rdb('-1# select sum volume from bar where '
+                                       '(`date$utc_datetime) = (`date$.z.z), '
+                                       'base = `$"{}", not sym like "*-*",'
+                                       ' (`time$utc_datetime) < (`time$.z.z),'
+                                       ' (`time$utc_datetime) > ((`time$.z.z) '
+                                       '- 00:15:00)'
+                                       .format(base))
 
-            avg_15m_20d = Vol.kdb('select sum volume by date'
-                                  ' from trade where date within ({};{}), '
-                                  'base=`$"{}", not sym like "*-*", '
-                                  '(`time$utc_datetime) < (`time$.z.z'
-                                  ') ,(`time$utc_datetime) > ((`time$.z.z) -'
-                                  ' 00:15:00)'
-                                  .format(start, stop, base))
+                td_15m[base] = td_15m[base]['volume'].item()
 
-            avg_15m_20d = int(avg_15m_20d.mean())
+                avg_15m_20d[base] = Vol.kdb('select sum volume by date'
+                                            ' from trade where date within ({}'
+                                            ';{}), base=`$"{}", not sym like'
+                                            ' "*-*", (`time$utc_datetime) < '
+                                            '(`time$.z.z) ,(`time$utc_datetime'
+                                            ') > ((`time$.z.z) - 00:15:00)'
+                                            .format(start, stop, base))
 
-            rvol_now = round(tday_15m / avg_15m_20d, 1)
+                try:
 
-            print('rvol_now:', base, rvol_now, end='\r')
+                    avg_15m_20d[base] = int(avg_15m_20d[base].mean())
 
-            time.sleep(3)
+                    rvol_now[base] = round(td_15m[base] / avg_15m_20d[base], 2)
+
+                except ValueError:
+
+                    rvol_now[base] = 0
+
+            os.system('clear')
+
+            for base, rvol_now in rvol_now.items():
+
+                print(base, rvol_now)
+
+            td_15m = dict()
+            avg_15m_20d = dict()
+            rvol_now = dict()
+
+            time.sleep(15)
 
     def get_front_months(self):
         """This code needs to be run once everyday at 5pm"""
@@ -531,4 +550,4 @@ class Vol(object):
 if __name__ == '__main__':
 
     ex = Vol()
-    ex.rvol_now(base='ES')
+    ex.rvol_now()

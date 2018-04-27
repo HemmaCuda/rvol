@@ -240,33 +240,44 @@ class Vol(object):
         return rvol, rvol20d
 
     @classmethod
-    def compare(cls, base=None):
-        """docstring"""
+    def rvol_now(cls, base=None):
+        """I have an idea to make this a real time Rvol (noncum)
+        What I want is to see the 20d 15m bars vs today"""
 
-        # Not finished
+        yday = datetime.datetime.now() - datetime.timedelta(days=1)
 
-        today = datetime.datetime.now()
-        yday = today - datetime.timedelta(days=1)
+        _ = pd.date_range(end=yday, periods=20, freq='B')
 
-        _ = pd.date_range(end=yday, periods=1, freq='B')
-        _ = ''.join(_.strftime('%Y.%m.%d'))
+        start = _.min().strftime('%Y.%m.%d')
+        stop = _.max().strftime('%Y.%m.%d')
 
-        now = datetime.datetime.now().time()
-        now = (now.replace(minute=(5 * (now.minute // 5)))
-               .strftime('%H:%M'))
+        while True:
 
-        new = Vol.rdb('-1# select sum volume by 0D00:05:00 xbar'
-                      ' utc_datetime from bar where (`date$utc_datetime)'
-                      ' = (`date$.z.z), base = `$"{}"'.format(base))
+            tday_15m = Vol.rdb('-1# select sum volume from bar where '
+                               '(`date$utc_datetime) = (`date$.z.z), '
+                               'base = `$"{}", not sym like "*-*",'
+                               ' (`time$utc_datetime) < (`time$.z.z),'
+                               ' (`time$utc_datetime) > ((`time$.z.z) '
+                               '- 00:15:00)'
+                               .format(base))
 
-        old = Vol.kdb('-1# select sum volume by 0D00:05:00 xbar'
-                      ' utc_datetime from trade where date = {},'
-                      ' (`time$utc_datetime) < (`time$.z.z),'
-                      ' base = `$"{}"'
-                      .format(_, base))
+            tday_15m = tday_15m['volume'].item()
 
-        print(new)
-        print(old)
+            avg_15m_20d = Vol.kdb('select sum volume by date'
+                                  ' from trade where date within ({};{}), '
+                                  'base=`$"{}", not sym like "*-*", '
+                                  '(`time$utc_datetime) < (`time$.z.z'
+                                  ') ,(`time$utc_datetime) > ((`time$.z.z) -'
+                                  ' 00:15:00)'
+                                  .format(start, stop, base))
+
+            avg_15m_20d = int(avg_15m_20d.mean())
+
+            rvol_now = round(tday_15m / avg_15m_20d, 1)
+
+            print('rvol_now:', base, rvol_now, end='\r')
+
+            time.sleep(3)
 
     def get_front_months(self):
         """This code needs to be run once everyday at 5pm"""
@@ -466,7 +477,7 @@ class Vol(object):
 
                 dispatcher.remove(upd_test_yl)
 
-        def single_outside_rvol():
+        def single_outside_rvol20d():
             """docstring"""
 
             if (rvol20d > 1.0) and (test_yh or test_yl):
@@ -477,9 +488,9 @@ class Vol(object):
 
                 print(wrkr_args['sym'], body)
 
-                dispatcher.remove(single_outside_rvol)
+                dispatcher.remove(single_outside_rvol20d)
 
-        def double_outside_rvol():
+        def double_outside_rvol20d():
             """docstring"""
 
             if (rvol20d > 1.0) and (test_yh + test_yl == 2):
@@ -490,7 +501,7 @@ class Vol(object):
 
                 print(wrkr_args['sym'], body)
 
-                dispatcher.remove(double_outside_rvol)
+                dispatcher.remove(double_outside_rvol20d)
 
         print('Monitoring:', wrkr_args['sym'])
 
@@ -498,8 +509,8 @@ class Vol(object):
 
         dispatcher = [upd_test_yh,
                       upd_test_yl,
-                      single_outside_rvol,
-                      double_outside_rvol]
+                      single_outside_rvol20d,
+                      double_outside_rvol20d]
 
         while True:
 
@@ -520,4 +531,4 @@ class Vol(object):
 if __name__ == '__main__':
 
     ex = Vol()
-    ex.prnt_rvol()
+    ex.rvol_now(base='ES')

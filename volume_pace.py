@@ -51,9 +51,6 @@ class Vol(object):
 
         self.kdb_data = Vol.init_rvol(self)
 
-        # with open('rvol.pickle', 'rb') as file:
-        #     self.kdb_data = pickle.load(file)
-
     @classmethod
     def kdb(cls, query=None):
         """connect to kdb"""
@@ -117,41 +114,45 @@ class Vol(object):
         start = _.min().strftime('%Y.%m.%d')
         stop = _.max().strftime('%Y.%m.%d')
 
-        # filepath = 'rvol.pickle'
+        filepath = 'rvol.pickle'
 
         kdb_data = dict()
 
-        # if os.path.exists(filepath):
-
-        #    get_file_date = time.ctime(os.path.getctime(filepath))
-
-        #    file_date = datetime.datetime.strptime(
-        #        get_file_date, "%a %b %d %H:%M:%S %Y").date()
-
-        # if not os.path.exists(filepath) or file_date != today.date():
-
         rvol_time = Vol.rvol_time()
 
-        for i in self.bases:
+        if os.path.exists(filepath):
 
-            kdb_data[i] = Vol.kdb('t: select sum volume by 0D00:05:00 xbar'
-                                  ' utc_datetime, date '
-                                  'from trade where date within ({}; {}),'
-                                  'base = `$"{}", not sym like "*-*";'
-                                  'select from t where (ltime utc_datetime'
-                                  ') within ({})'
-                                  .format(start, stop, i, rvol_time))
+            get_file_date = time.ctime(os.path.getctime(filepath))
 
-            print('Initializing Rvol:', i)
+            file_datetime = datetime.datetime.strptime(
+                get_file_date, "%a %b %d %H:%M:%S %Y")
+
+        if (not os.path.exists(filepath) or
+                file_datetime.date() != today.date() or not
+                (rvol_time[0:5] < file_datetime.time().strftime('%H:%M')
+                 < rvol_time[8:13])):
+
+            for i in self.bases:
+
+                kdb_data[i] = Vol.kdb('t: select sum volume by 0D00:05:00 xbar'
+                                      ' utc_datetime, date '
+                                      'from trade where date within ({}; {}),'
+                                      'base = `$"{}", not sym like "*-*";'
+                                      'select from t where (ltime utc_datetime'
+                                      ') within ({})'
+                                      .format(start, stop, i, rvol_time))
+
+                print('Initializing Rvol:', i)
+
+            with open(filepath, 'wb') as file:
+                pickle.dump(kdb_data, file)
+
+        else:
+
+            with open('rvol.pickle', 'rb') as file:
+                kdb_data = pickle.load(file)
 
         return kdb_data
-
-        # print(kdb_data['GC'].groupby(by='date').sum())
-
-        # print(kdb_data['GC'].loc[kdb_data['GC'].index.levels[0].strftime('%H:%M') < utc])
-
-        # with open(filepath, 'wb') as file:
-        # pickle.dump(kdb_data, file)
 
     def prnt_rvol(self):
         """docstring"""
@@ -169,8 +170,6 @@ class Vol(object):
         utc = datetime.datetime.utcnow().time().strftime('%H:%M')
 
         rvol_time = Vol.rvol_time()[0:5]
-
-        print(rvol_time)
 
         # Calculate
 
@@ -322,9 +321,9 @@ class Vol(object):
 
             os.system('clear')
 
-            for base, rvol_now in rvol_now.items():
+            for base, value in rvol_now.items():
 
-                print(base, rvol_now)
+                print(base, value)
 
             td_15m = dict()
             avg_15m_20d = dict()
@@ -584,4 +583,4 @@ class Vol(object):
 if __name__ == '__main__':
 
     ex = Vol()
-    ex.rvol_now()
+    ex.prnt_rvol()

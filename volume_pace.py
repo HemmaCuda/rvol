@@ -31,6 +31,12 @@ from qpython import qconnection
 # Structure
 # Workers get price, update state, generate signals
 
+# What will make me the most money
+# Multiple Rvols?
+# Being able to pass command line args
+# Sorting bases into sectors
+# Let's see if I can get multiple Rvols done
+
 
 class Vol(object):
     """docstring"""
@@ -43,10 +49,10 @@ class Vol(object):
                       'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FGBL', 'KC',
                       'SB', 'CC', 'C']
 
-        Vol.init_rvol(self)
+        self.kdb_data = Vol.init_rvol(self)
 
-        with open('rvol.pickle', 'rb') as file:
-            self.kdb_data = pickle.load(file)
+        # with open('rvol.pickle', 'rb') as file:
+        #     self.kdb_data = pickle.load(file)
 
     @classmethod
     def kdb(cls, query=None):
@@ -76,6 +82,26 @@ class Vol(object):
 
         return rdb(query)
 
+    @classmethod
+    def rvol_time(cls):
+        """Returns the desired rvol session"""
+
+        now = datetime.datetime.now().time()
+
+        if datetime.time(6, 0) <= now <= datetime.time(10, 29, 59):
+
+            return '06:00; 10:29'
+
+        elif datetime.time(10, 30) <= now <= datetime.time(16, 59, 59):
+
+            return '10:30; 16:59'
+
+        elif datetime.time(17, 0) <= now <= datetime.time(23, 59, 59):
+
+            return '17:00; 23:59'
+
+        return '24:00; 05:59'
+
     def init_rvol(self):
         """docstring"""
 
@@ -91,33 +117,41 @@ class Vol(object):
         start = _.min().strftime('%Y.%m.%d')
         stop = _.max().strftime('%Y.%m.%d')
 
-        filepath = 'rvol.pickle'
+        # filepath = 'rvol.pickle'
 
         kdb_data = dict()
 
-        if os.path.exists(filepath):
+        # if os.path.exists(filepath):
 
-            get_file_date = time.ctime(os.path.getctime(filepath))
+        #    get_file_date = time.ctime(os.path.getctime(filepath))
 
-            file_date = datetime.datetime.strptime(
-                get_file_date, "%a %b %d %H:%M:%S %Y").date()
+        #    file_date = datetime.datetime.strptime(
+        #        get_file_date, "%a %b %d %H:%M:%S %Y").date()
 
-        if not os.path.exists(filepath) or file_date != today.date():
+        # if not os.path.exists(filepath) or file_date != today.date():
 
-            for i in self.bases:
+        rvol_time = Vol.rvol_time()
 
-                kdb_data[i] = Vol.kdb('select sum volume by 0D00:05:00 xbar'
-                                      ' ltime utc_datetime '
-                                      'from trade where date within ({}; {}),'
-                                      'base = `$"{}", not sym like "*-*", '
-                                      '((`time$(ltime utc_datetime)) within '
-                                      '((`time$07:00:00); (`time$15:00:00)))'
-                                      .format(start, stop, i))
+        for i in self.bases:
 
-                print('Initializing Rvol:', i)
+            kdb_data[i] = Vol.kdb('t: select sum volume by 0D00:05:00 xbar'
+                                  ' utc_datetime, date '
+                                  'from trade where date within ({}; {}),'
+                                  'base = `$"{}", not sym like "*-*";'
+                                  'select from t where (ltime utc_datetime'
+                                  ') within ({})'
+                                  .format(start, stop, i, rvol_time))
 
-            with open(filepath, 'wb') as file:
-                pickle.dump(kdb_data, file)
+            print('Initializing Rvol:', i)
+
+        return kdb_data
+
+        # print(kdb_data['GC'].groupby(by='date').sum())
+
+        # print(kdb_data['GC'].loc[kdb_data['GC'].index.levels[0].strftime('%H:%M') < utc])
+
+        # with open(filepath, 'wb') as file:
+        # pickle.dump(kdb_data, file)
 
     def prnt_rvol(self):
         """docstring"""
@@ -132,19 +166,25 @@ class Vol(object):
         rvol = dict()
         rvol20d = dict()
 
+        utc = datetime.datetime.utcnow().time().strftime('%H:%M')
+
+        rvol_time = Vol.rvol_time()[0:5]
+
+        print(rvol_time)
+
         # Calculate
 
         for i in self.bases:
+
+            # I need to rewrite this query
 
             _ = Vol.rdb('select sum volume by `date$utc_datetime'
                         ' from bar where (`date$utc_datetime)'
                         ' = (`date$.z.z),'
                         ' base = `$"{}", not sym like "*-*", '
                         '((`time$(ltime utc_datetime)) within (('
-                        '`time$07:00:00); (`time${}:00)))'
-                        .format(i, now))
-
-            # Should be 1 number, changed from .sum()
+                        '`time${}:00); (`time${}:00)))'
+                        .format(i, rvol_time, now))
 
             try:
 
@@ -155,28 +195,22 @@ class Vol(object):
                 print(i, 'ValueError')
 
             cut = self.kdb_data[i].loc[
-                self.kdb_data[i].index.strftime('%H:%M') < now]
+                self.kdb_data[i].index.levels[0].strftime('%H:%M') < utc]
 
-            cumsum = cut.groupby(pd.Grouper(freq='D'))['volume'].sum()
-
-            cumsum = cumsum[cumsum != 0]
+            datesum = cut.groupby(by='date').sum()
 
             try:
 
-                yday_vol = cumsum[-1]
+                yday_vol = datesum['volume'].loc[datesum.idxmax()].item()
 
-            except KeyError:
+            except ValueError:
 
-                print(i, 'KeyError')
+                print(i, 'ValueError')
 
-            except IndexError:
-
-                print(i, 'IndexError')
-
-            hist_mean = cumsum.mean()
+            mean_20d = datesum.mean().item()
 
             rvol[i] = round((tday_cum / yday_vol), 2)
-            rvol20d[i] = round((tday_cum / hist_mean), 2)
+            rvol20d[i] = round((tday_cum / mean_20d), 2)
 
         rvol_sort = sorted(rvol, key=rvol.get)
         rvol20d_sort = sorted(rvol20d, key=rvol20d.get)
@@ -296,7 +330,7 @@ class Vol(object):
             avg_15m_20d = dict()
             rvol_now = dict()
 
-            time.sleep(15)
+            time.sleep(3)
 
     def get_front_months(self):
         """This code needs to be run once everyday at 5pm"""

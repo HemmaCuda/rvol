@@ -319,17 +319,61 @@ class Vol(object):
 
                     rvol_now[base] = 0
 
-            os.system('clear')
-
-            for base, value in rvol_now.items():
-
-                print(base, value)
+            Vol.print_rvol(rvol_now)
 
             td_15m = dict()
             avg_15m_20d = dict()
             rvol_now = dict()
 
-            time.sleep(3)
+    @classmethod
+    def print_rvol(cls, rvol=None):
+        '''docstring'''
+
+        sectors = {"Metals": ["GC", "SI", "HG", "PL", "PA"],
+                   "Meats": ["LE", "HE", "GF"],
+                   "Energy": ["CL", "RB", "HO", "BRN", "NG"],
+                   "Grains": ["ZC", "ZW", "ZS", "ZM", "ZL", "KE", "MWE"],
+                   "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL"],
+                   "Softs": ["SB", "CT", "KC", "CC", "C"],
+                   "Equities": ["ES", "NQ", "FESX", "RTY", "YM", "EMD", "Z"]}
+
+        column_width = 12
+
+        # determine largest sector which is used to determine num_rows
+        num_rows = max([len(sectors.values())])
+
+        # create empty strings for each row to be filled
+        output_buffer = [''] * num_rows
+
+        # output_buffer = range(num_rows) * output_buffer.append("")
+
+        for key in sectors:
+
+            column_names = key + ' ' * (column_width - len(key))
+
+            for i in range(num_rows):
+
+                # append each key value pair to the corresponding row
+
+                if i < len(sectors[key]):
+
+                    temp = sectors[key][i] + ' ' + str(rvol[sectors[key][i]])
+                    temp += ' ' * (column_width - len(temp))
+
+                else:
+
+                    temp = ' ' * column_width
+
+                output_buffer[i] += temp
+
+        # clear screen and print everything to screen
+
+        print('\n' * 50)
+        print(datetime.datetime.now().time())
+        print(column_names)
+
+        for line in output_buffer:
+            print(line)
 
     def get_front_months(self):
         """This code needs to be run once everyday at 5pm"""
@@ -583,4 +627,4 @@ class Vol(object):
 if __name__ == '__main__':
 
     ex = Vol()
-    ex.prnt_rvol()
+    ex.rvol_now()

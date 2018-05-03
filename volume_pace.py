@@ -344,8 +344,8 @@ class Vol(object):
         print(rvol_20d)
 
 
-class Alert(object):
-    '''Multithreaded sms alert system'''
+class Market(object):
+    '''Generic base/sym data'''
 
     def __init__(self):
 
@@ -450,6 +450,18 @@ class Alert(object):
 
         return yday_ohlc
 
+
+class Alert(object):
+    '''Multithreaded sms alert system'''
+
+    def __init__(self):
+
+        self.bases = ['GC', 'SI', 'HG', 'PA', 'PL', 'LE', 'HE', 'GF', 'CL',
+                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'ZL',
+                      'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'MWE', 'ES', 'TF',
+                      'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FGBL', 'KC',
+                      'SB', 'CC', 'C']
+
     @classmethod
     def upd_price(cls, sym):
         """docstring"""
@@ -476,7 +488,7 @@ class Alert(object):
 
         # Probably need to check exchange status somewhere
 
-        yday_ohlc = Vol.yday_ohlc(wrkr_args['sym'])
+        yday_ohlc = Market.yday_ohlc(wrkr_args['sym'])
 
         # Initialize state
 
@@ -542,8 +554,8 @@ class Alert(object):
 
             # Update state
 
-            price = Vol.upd_price(wrkr_args['sym'])
-            rvol, rvol20d = Vol.upd_rvol(
+            price = Alert.upd_price(wrkr_args['sym'])
+            rvol, rvol20d = Alert.upd_rvol(
                 wrkr_args['base'], wrkr_args['kdb_data'])
 
             # Generate alerts
@@ -553,29 +565,33 @@ class Alert(object):
 
             time.sleep(random.randint(5, 25))
 
-    def start(self):
+    def main(self):
         """docstring"""
 
         # Run tests
 
-        Vol.test_rdb()
+        Alert.test_rdb()
 
         # Get front months
 
-        basesyms = Vol.get_front_months(self)
+        basesyms = Market.get_front_months(self)
 
         wrkr_args = list()
+
+        # Import KDB data from Vol class
+
+        rvol = Vol()
 
         for key, value in basesyms.items():
             wrkr_args.append({'base': key, 'sym': value})
 
         for i in wrkr_args:
-            i['kdb_data'] = self.kdb_data[i['base']]
+            i['kdb_data'] = rvol.kdb_data[i['base']]
 
         # Multiprocessing
 
         pool = Pool(len(wrkr_args))
-        pool.map(Vol.workers, wrkr_args)
+        pool.map(Alert.workers, wrkr_args)
         pool.close()
         pool.join()
 

@@ -49,6 +49,15 @@ class Vol(object):
                       'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FGBL', 'KC',
                       'SB', 'CC', 'C']
 
+        self.sectors = {"Metals": ["GC", "SI", "HG", "PL", "PA"],
+                        "Meats": ["LE", "HE", "GF"],
+                        "Energy": ["CL", "RB", "HO", "BRN", "NG"],
+                        "Grains": ["ZC", "ZW", "ZS", "ZM", "ZL", "KE", "MWE"],
+                        "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL"],
+                        "Softs": ["SB", "CT", "KC", "CC", "C"],
+                        "Equities": ["ES", "NQ", "FESX", "RTY", "YM", "EMD",
+                                     "Z"]}
+
         self.kdb_data = Vol.init_rvol(self)
 
     @classmethod
@@ -154,200 +163,146 @@ class Vol(object):
 
         return kdb_data
 
-    def prnt_rvol(self):
-        """docstring"""
-
-        # Single threaded
+    @classmethod
+    def nearest_15m_vol(cls, base):
+        '''Volume in nearest Noncontinuous 15m bar'''
 
         now = datetime.datetime.now().time()
 
         now = (now.replace(minute=(5 * (now.minute // 5)))
                .strftime('%H:%M'))
-
-        rvol = dict()
-        rvol20d = dict()
-
-        utc = datetime.datetime.utcnow().time().strftime('%H:%M')
 
         rvol_time = Vol.rvol_time()[0:5]
 
-        # Calculate
+        data = Vol.rdb('select sum volume by `date$utc_datetime'
+                       ' from bar where (`date$utc_datetime)'
+                       ' = (`date$.z.z),'
+                       ' base = `$"{}", not sym like "*-*", '
+                       '((`time$(ltime utc_datetime)) within (('
+                       '`time${}:00); (`time${}:00)))'
+                       .format(base, rvol_time, now))
+        try:
 
-        for i in self.bases:
+            return data['volume'].item()
 
-            # I need to rewrite this query
+        except ValueError:
 
-            _ = Vol.rdb('select sum volume by `date$utc_datetime'
-                        ' from bar where (`date$utc_datetime)'
-                        ' = (`date$.z.z),'
-                        ' base = `$"{}", not sym like "*-*", '
-                        '((`time$(ltime utc_datetime)) within (('
-                        '`time${}:00); (`time${}:00)))'
-                        .format(i, rvol_time, now))
+            return 0
 
-            try:
-
-                tday_cum = _['volume'].item()
-
-            except ValueError:
-
-                print(i, 'ValueError')
-
-            cut = self.kdb_data[i].loc[
-                self.kdb_data[i].index.levels[0].strftime('%H:%M') < utc]
-
-            datesum = cut.groupby(by='date').sum()
-
-            try:
-
-                yday_vol = datesum['volume'].loc[datesum.idxmax()].item()
-
-            except ValueError:
-
-                print(i, 'ValueError')
-
-            mean_20d = datesum.mean().item()
-
-            rvol[i] = round((tday_cum / yday_vol), 2)
-            rvol20d[i] = round((tday_cum / mean_20d), 2)
-
-        rvol_sort = sorted(rvol, key=rvol.get)
-        rvol20d_sort = sorted(rvol20d, key=rvol20d.get)
-
-        print('Rvol:')
-        for i in rvol_sort:
-            print(i, rvol[i])
-
-        print('')
-
-        print('Rvol20:')
-        for i in rvol20d_sort:
-            print(i, rvol20d[i])
-
-    @classmethod
-    def upd_rvol(cls, base, kdb_data):
+    def nearest_15m_20d_vol_avg(self, base):
         '''docstring'''
 
-        # Multi threaded
+        # yday_vol code, requires ValueError exception
+        # yday_vol = datesum['volume'].loc[datesum.idxmax()].item()
 
-        now = datetime.datetime.now().time()
+        utc = datetime.datetime.utcnow().time().strftime('%H:%M')
 
-        now = (now.replace(minute=(5 * (now.minute // 5)))
-               .strftime('%H:%M'))
+        cut = self.kdb_data[base].loc[
+            self.kdb_data[base].index.levels[0].strftime('%H:%M') < utc]
 
-        # Calculate
+        return cut.groupby(by='date').sum().mean().item()
 
-        _ = Vol.rdb('select sum volume by `date$utc_datetime'
-                    ' from bar where (`date$utc_datetime)'
-                    ' = (`date$.z.z),'
-                    ' base = `$"{}", not sym like "*-*", '
-                    '((`time$(ltime utc_datetime)) within (('
-                    '`time$07:00:00); (`time${}:00)))'
-                    .format(base, now))
+    def rvol_20d(self, base):
+        """Calculates the 20d Rvol to the nearest 5 minute bar"""
 
-        tday_cum = _['volume'].sum()
+        today = Vol.nearest_15m_vol(base)
 
-        cut = kdb_data.loc[kdb_data.index.strftime('%H:%M') < now]
+        avg_20d = Vol.nearest_15m_20d_vol_avg(self, base)
 
-        cumsum = cut.groupby(pd.Grouper(freq='D'))['volume'].sum()
+        return round((today / avg_20d), 2)
 
-        cumsum = cumsum[cumsum != 0]
+    @classmethod
+    def last_15m_vol(cls, base):
+        '''Volume in continuous previous 15 minutes'''
+
+        td_15m = Vol.rdb('-1# select sum volume from bar where '
+                         '(`date$utc_datetime) = (`date$.z.z), '
+                         'base = `$"{}", not sym like "*-*",'
+                         ' (`time$utc_datetime) < (`time$.z.z),'
+                         ' (`time$utc_datetime) > ((`time$.z.z) '
+                         '- 00:15:00)'
+                         .format(base))
+
+        return td_15m['volume'].item()
+
+    @classmethod
+    def last_20d_15m_vol(cls, base):
+        '''Mean volume in continuous previous 15 minutes for last 20 days'''
+
+        first, last = Vol.date_rn_last_20d()
+
+        data = Vol.kdb('select sum volume by date'
+                       ' from trade where date within ({}'
+                       ';{}), base=`$"{}", not sym like'
+                       ' "*-*", (`time$utc_datetime) < '
+                       '(`time$.z.z) ,(`time$utc_datetime'
+                       ') > ((`time$.z.z) - 00:15:00)'
+                       .format(first, last, base))
 
         try:
 
-            yday_vol = cumsum[-1]
+            return int(data.mean())
 
-        except KeyError:
+        except ValueError:
 
-            pass
+            return 0
 
-        except IndexError:
-
-            pass
-
-        hist_mean = cumsum.mean()
-
-        rvol = round(tday_cum / yday_vol, 2)
-        rvol20d = round(tday_cum / hist_mean, 2)
-
-        return rvol, rvol20d
-
-    def rvol_now(self):
-        """I have an idea to make this a real time Rvol (noncum)
-        What I want is to see the 20d 15m bars vs today"""
+    @classmethod
+    def date_rn_last_20d(cls):
+        '''Returns first and last date for the previous 20 business days'''
 
         yday = datetime.datetime.now() - datetime.timedelta(days=1)
 
         _ = pd.date_range(end=yday, periods=20, freq='B')
 
-        start = _.min().strftime('%Y.%m.%d')
-        stop = _.max().strftime('%Y.%m.%d')
+        first_date = _.min().strftime('%Y.%m.%d')
+        last_date = _.max().strftime('%Y.%m.%d')
 
-        td_15m = dict()
-        avg_15m_20d = dict()
-        rvol_now = dict()
-
-        while True:
-
-            for base in self.bases:
-
-                td_15m[base] = Vol.rdb('-1# select sum volume from bar where '
-                                       '(`date$utc_datetime) = (`date$.z.z), '
-                                       'base = `$"{}", not sym like "*-*",'
-                                       ' (`time$utc_datetime) < (`time$.z.z),'
-                                       ' (`time$utc_datetime) > ((`time$.z.z) '
-                                       '- 00:15:00)'
-                                       .format(base))
-
-                td_15m[base] = td_15m[base]['volume'].item()
-
-                avg_15m_20d[base] = Vol.kdb('select sum volume by date'
-                                            ' from trade where date within ({}'
-                                            ';{}), base=`$"{}", not sym like'
-                                            ' "*-*", (`time$utc_datetime) < '
-                                            '(`time$.z.z) ,(`time$utc_datetime'
-                                            ') > ((`time$.z.z) - 00:15:00)'
-                                            .format(start, stop, base))
-
-                try:
-
-                    avg_15m_20d[base] = int(avg_15m_20d[base].mean())
-
-                    rvol_now[base] = round(td_15m[base] / avg_15m_20d[base], 2)
-
-                except ValueError:
-
-                    rvol_now[base] = 0
-
-            Vol.print_rvol(rvol_now)
-
-            td_15m = dict()
-            avg_15m_20d = dict()
-            rvol_now = dict()
+        return first_date, last_date
 
     @classmethod
-    def print_rvol(cls, rvol=None):
-        '''docstring'''
+    def rvol_now(cls, base):
+        """Rolling 15m volume vs average of last 20 days"""
 
-        sectors = {"Metals": ["GC", "SI", "HG", "PL", "PA"],
-                   "Meats": ["LE", "HE", "GF"],
-                   "Energy": ["CL", "RB", "HO", "BRN", "NG"],
-                   "Grains": ["ZC", "ZW", "ZS", "ZM", "ZL", "KE", "MWE"],
-                   "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL"],
-                   "Softs": ["SB", "CT", "KC", "CC", "C"],
-                   "Equities": ["ES", "NQ", "FESX", "RTY", "YM", "EMD", "Z"]}
+        td_15m = Vol.last_15m_vol(base)
+
+        avg_15m_20d = Vol.last_20d_15m_vol(base)
+
+        try:
+
+            return round(td_15m / avg_15m_20d, 2)
+
+        except (ValueError, ZeroDivisionError):
+
+            return 0
+
+    def main(self):
+        '''Returns a dict of base : rvol_now pairs'''
+
+        rvol_now = dict()
+        rvol_20d = dict()
+
+        for base in self.bases:
+
+            rvol_now[base] = Vol.rvol_now(base)
+            rvol_20d[base] = Vol.rvol_20d(self, base)
+
+        Vol.print_rvol(self, rvol_now, rvol_20d)
+
+    def print_rvol(self, rvol_now, rvol_20d):
+        '''Input is a dict with base : rvol pairs, output to terminal'''
 
         column_width = 12
 
         # determine largest sector which is used to determine num_rows
-        num_rows = max([len(sectors.values())])
+
+        num_rows = max([len(self.sectors.values())])
 
         # create empty strings for each row to be filled
+
         output_buffer = [''] * num_rows
 
-        # output_buffer = range(num_rows) * output_buffer.append("")
-
-        for key in sectors:
+        for key in self.sectors:
 
             column_names = key + ' ' * (column_width - len(key))
 
@@ -355,10 +310,21 @@ class Vol(object):
 
                 # append each key value pair to the corresponding row
 
-                if i < len(sectors[key]):
+                if i < len(self.sectors[key]):
 
-                    temp = sectors[key][i] + ' ' + str(rvol[sectors[key][i]])
-                    temp += ' ' * (column_width - len(temp))
+                    if rvol_now[self.sectors[key][i]] > 1.0:
+
+                        # future coloring here
+
+                        temp = (self.sectors[key][i] + ' '
+                                + str(rvol_now[self.sectors[key][i]]))
+                        temp += ' ' * (column_width - len(temp))
+
+                    else:
+
+                        temp = (self.sectors[key][i] + ' ' +
+                                str(rvol_now[self.sectors[key][i]]))
+                        temp += ' ' * (column_width - len(temp))
 
                 else:
 
@@ -374,6 +340,20 @@ class Vol(object):
 
         for line in output_buffer:
             print(line)
+
+        print(rvol_20d)
+
+
+class Alert(object):
+    '''Multithreaded sms alert system'''
+
+    def __init__(self):
+
+        self.bases = ['GC', 'SI', 'HG', 'PA', 'PL', 'LE', 'HE', 'GF', 'CL',
+                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'ZL',
+                      'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'MWE', 'ES', 'TF',
+                      'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FGBL', 'KC',
+                      'SB', 'CC', 'C']
 
     def get_front_months(self):
         """This code needs to be run once everyday at 5pm"""
@@ -490,56 +470,6 @@ class Vol(object):
         assert _.index.time[0].hour == datetime.datetime.now().time().hour
         assert _.index.time[0].minute == datetime.datetime.now().time().minute
 
-        # Write tests for historical
-
-    def start(self):
-        """docstring"""
-
-        # Run tests
-
-        Vol.test_rdb()
-
-        # Get front months
-
-        basesyms = Vol.get_front_months(self)
-
-        wrkr_args = list()
-
-        for key, value in basesyms.items():
-            wrkr_args.append({'base': key, 'sym': value})
-
-        for i in wrkr_args:
-            i['kdb_data'] = self.kdb_data[i['base']]
-
-        # Multiprocessing
-
-        pool = Pool(len(wrkr_args))
-        pool.map(Vol.workers, wrkr_args)
-        pool.close()
-        pool.join()
-
-    @classmethod
-    def send_sms(cls, sym, body):
-        """docstring"""
-
-        # Send Text
-
-        account_sid = "ACcabf56d5753722516ce85f436d8cd668"
-        auth_token = "fbd514353b7b6f1cb08782d431f26b24"
-
-        twilio = Client(account_sid, auth_token)
-
-        numbers = ['17025739865']
-
-        # , '13157061068', '16302025448'
-
-        for i in numbers:
-            twilio.api.account.messages.create(
-                to=i,
-                from_="+17027106358",
-                body="{}, {}, {}".format(
-                    datetime.datetime.now().time(), sym, body))
-
     @classmethod
     def workers(cls, wrkr_args):
         """docstring"""
@@ -623,8 +553,107 @@ class Vol(object):
 
             time.sleep(random.randint(5, 25))
 
+    def start(self):
+        """docstring"""
+
+        # Run tests
+
+        Vol.test_rdb()
+
+        # Get front months
+
+        basesyms = Vol.get_front_months(self)
+
+        wrkr_args = list()
+
+        for key, value in basesyms.items():
+            wrkr_args.append({'base': key, 'sym': value})
+
+        for i in wrkr_args:
+            i['kdb_data'] = self.kdb_data[i['base']]
+
+        # Multiprocessing
+
+        pool = Pool(len(wrkr_args))
+        pool.map(Vol.workers, wrkr_args)
+        pool.close()
+        pool.join()
+
+    @classmethod
+    def send_sms(cls, sym, body):
+        """docstring"""
+
+        # Send Text
+
+        account_sid = "ACcabf56d5753722516ce85f436d8cd668"
+        auth_token = "fbd514353b7b6f1cb08782d431f26b24"
+
+        twilio = Client(account_sid, auth_token)
+
+        numbers = ['17025739865']
+
+        # , '13157061068', '16302025448'
+
+        for i in numbers:
+            twilio.api.account.messages.create(
+                to=i,
+                from_="+17027106358",
+                body="{}, {}, {}".format(
+                    datetime.datetime.now().time(), sym, body))
+
+    @classmethod
+    def upd_rvol(cls, base, kdb_data):
+        '''docstring'''
+
+        # Multi threaded
+
+        now = datetime.datetime.now().time()
+
+        now = (now.replace(minute=(5 * (now.minute // 5)))
+               .strftime('%H:%M'))
+
+        # Calculate
+
+        _ = Vol.rdb('select sum volume by `date$utc_datetime'
+                    ' from bar where (`date$utc_datetime)'
+                    ' = (`date$.z.z),'
+                    ' base = `$"{}", not sym like "*-*", '
+                    '((`time$(ltime utc_datetime)) within (('
+                    '`time$07:00:00); (`time${}:00)))'
+                    .format(base, now))
+
+        tday_cum = _['volume'].sum()
+
+        cut = kdb_data.loc[kdb_data.index.strftime('%H:%M') < now]
+
+        cumsum = cut.groupby(pd.Grouper(freq='D'))['volume'].sum()
+
+        cumsum = cumsum[cumsum != 0]
+
+        try:
+
+            yday_vol = cumsum[-1]
+
+        except KeyError:
+
+            pass
+
+        except IndexError:
+
+            pass
+
+        hist_mean = cumsum.mean()
+
+        rvol = round(tday_cum / yday_vol, 2)
+        rvol20d = round(tday_cum / hist_mean, 2)
+
+        return rvol, rvol20d
+
 
 if __name__ == '__main__':
 
     ex = Vol()
-    ex.rvol_now()
+
+    while True:
+
+        ex.main()

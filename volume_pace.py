@@ -145,8 +145,9 @@ class Vol(object):
 
                 kdb_data[i] = Vol.kdb('t: select sum volume by 0D00:05:00 xbar'
                                       ' utc_datetime, date '
-                                      'from trade where date within ({}; {}),'
-                                      'base = `$"{}", not sym like "*-*";'
+                                      'from trade where date within ({}; {}), '
+                                      'base = `$"{}", not sym like "*-*", '
+                                      'null trade_type; '
                                       'select from t where (ltime utc_datetime'
                                       ') within ({})'
                                       .format(start, stop, i, rvol_time))
@@ -236,7 +237,7 @@ class Vol(object):
                        ';{}), base=`$"{}", not sym like'
                        ' "*-*", (`time$utc_datetime) < '
                        '(`time$.z.z) ,(`time$utc_datetime'
-                       ') > ((`time$.z.z) - 00:15:00)'
+                       ') > ((`time$.z.z) - 00:15:00), null trade_type'
                        .format(first, last, base))
 
         try:
@@ -291,57 +292,83 @@ class Vol(object):
 
     def print_rvol(self, rvol_now, rvol_20d):
         '''Input is a dict with base : rvol pairs, output to terminal'''
-
-        column_width = 12
-
-        # determine largest sector which is used to determine num_rows
-
-        num_rows = max([len(self.sectors.values())])
-
-        # create empty strings for each row to be filled
-
-        output_buffer = [''] * num_rows
-
+        
+        # set num_rows to length of the largest sector and initialize the output_buffer 
+        num_rows = 2 * max([len(self.sectors.values())])
+        output_buffer = [""] * num_rows
+        column_names = ""
+        COLUMN_WIDTH = 20
+        INTENSITY_FACTOR = 1.3      
+                
         for key in self.sectors:
 
-            column_names = key + ' ' * (column_width - len(key))
+            column_names += key + ' ' * (COLUMN_WIDTH - len(key))
 
-            for i in range(num_rows):
+            for i in range(max([len(self.sectors.values())])):
+                
+                t1 = ""
+                t2 = ""
 
                 # append each key value pair to the corresponding row
-
                 if i < len(self.sectors[key]):
 
-                    if rvol_now[self.sectors[key][i]] > 1.0:
+                    symbol = self.sectors[key][i]
+                    rvol_intensity = int(rvol_now[symbol] // INTENSITY_FACTOR)
 
-                        # future coloring here
+                    t1 = symbol + ' ' * ((COLUMN_WIDTH // 2) - len(symbol) - rvol_intensity) + ('*' * rvol_intensity) + str(rvol_now[symbol])
+                    t2 = (COLUMN_WIDTH // 2) * ' ' + str(rvol_20d[symbol])
 
-                        temp = (self.sectors[key][i] + ' '
-                                + str(rvol_now[self.sectors[key][i]]))
-                        temp += ' ' * (column_width - len(temp))
+                # Fill whitespace to align columns   
+                t1 += ' ' * (COLUMN_WIDTH - len(t1))
+                t2 += ' ' * (COLUMN_WIDTH - len(t2))
 
-                    else:
+                output_buffer[i*2] += t1
+                output_buffer[(i*2)+1] += t2
+     
+        # format column names for Top X Now and Session
+        t3 = "Top " + str(num_rows) + " Now"
+        t3 += ' ' * (COLUMN_WIDTH - len(t3))
+        column_names += t3
 
-                        temp = (self.sectors[key][i] + ' ' +
-                                str(rvol_now[self.sectors[key][i]]))
-                        temp += ' ' * (column_width - len(temp))
+        t3 = "Top " + str(num_rows) + " Session"
+        t3 += ' ' * (COLUMN_WIDTH - len(t3))
+        column_names += t3
 
-                else:
+        # get sorted list of bases from rvol_now
+        rvol_sort = sorted(rvol_now, key=rvol_now.get, reverse = True)
 
-                    temp = ' ' * column_width
+        # Top X Now - format each line and add to the output buffer
+        for i in range (0, num_rows):
+            
+            symbol = rvol_sort[i]
+            rvol_intensity = int(rvol_now[symbol] // INTENSITY_FACTOR)
 
-                output_buffer[i] += temp
+            temp = rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(symbol) - rvol_intensity) + '*' * rvol_intensity + str(rvol_now[symbol])
+            temp += ' ' * (COLUMN_WIDTH - len(temp))
+            
+            output_buffer[i] += temp
+
+        # get sorted list of bases from rvol_20d
+        rvol_sort = sorted(rvol_20d, key=rvol_20d.get, reverse = True)
+
+        # Top X Session - format each line and add to the output buffer
+        for i in range (0, num_rows):
+            
+            symbol = rvol_sort[i]
+            rvol_intensity = int(rvol_20d[symbol] // INTENSITY_FACTOR)
+
+            temp = rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(symbol) - rvol_intensity) + '*' * rvol_intensity + str(rvol_20d[symbol])
+            temp += ' ' * (COLUMN_WIDTH - len(temp))
+
+            output_buffer[i] += temp
 
         # clear screen and print everything to screen
+        print('\n'*50)
 
-        print('\n' * 50)
-        print(datetime.datetime.now().time())
-        print(column_names)
-
+        print (datetime.datetime.now().time())
+        print (column_names)
         for line in output_buffer:
-            print(line)
-
-        print(rvol_20d)
+            print (line)
 
 
 class Market(object):
@@ -355,10 +382,17 @@ class Market(object):
                       'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FGBL', 'KC',
                       'SB', 'CC', 'C']
 
-    def get_front_months(self):
-        """This code needs to be run once everyday at 5pm"""
+        self.front_months = Market.get_front_months(self)
 
-        # Get front month based on yesterday EOD volume
+        self.yday_ohlc = dict()
+
+        for sym in self.front_months.items():
+
+            self.yday_ohlc[sym] = Market.get_yday_ohlc(sym)
+
+    def get_front_months(self):
+        """Returns a dict of base : syms,
+            Selects front months based on yesterday EOD volume"""
 
         now = datetime.datetime.now().date()
 
@@ -432,7 +466,7 @@ class Market(object):
         return basesyms
 
     @classmethod
-    def yday_ohlc(cls, sym):
+    def get_yday_ohlc(cls, sym):
         """docstring"""
 
         # assumes last row in dailybar is last trade day
@@ -488,7 +522,7 @@ class Alert(object):
 
         # Probably need to check exchange status somewhere
 
-        yday_ohlc = Market.yday_ohlc(wrkr_args['sym'])
+        yday_ohlc = Market.get_yday_ohlc(wrkr_args['sym'])
 
         # Initialize state
 

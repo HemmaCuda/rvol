@@ -8,6 +8,7 @@ import os
 from multiprocessing import Pool
 from twilio.rest import Client
 import pandas as pd
+import numpy as np
 from qpython import qconnection
 
 # Bugs
@@ -210,7 +211,12 @@ class Vol(object):
 
         avg_20d = Vol.nearest_15m_20d_vol_avg(self, base)
 
-        return round((today / avg_20d), 2)
+        rvol_20d = round((today / avg_20d), 2)
+
+        if np.isnan(rvol_20d):
+
+            return 0
+        return rvol_20d
 
     @classmethod
     def last_15m_vol(cls, base):

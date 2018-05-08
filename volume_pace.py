@@ -241,7 +241,7 @@ class Vol(object):
         data = Vol.kdb('select sum volume by date'
                        ' from trade where date within ({}'
                        ';{}), base=`$"{}", not sym like'
-                       ' "*-*", (`time$utc_datetime) < '
+                       ' "*-*", (`time$utc_datjhgjhetime) < '
                        '(`time$.z.z) ,(`time$utc_datetime'
                        ') > ((`time$.z.z) - 00:15:00), null trade_type'
                        .format(first, last, base))

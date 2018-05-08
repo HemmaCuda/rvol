@@ -319,7 +319,7 @@ class Vol(object):
                 if i < len(self.sectors[key]):
 
                     symbol = self.sectors[key][i]
-                    rvol_intensity = int(rvol_now[symbol] // INTENSITY_FACTOR)
+                    rvol_intensity = min(5,int(rvol_now[symbol] // INTENSITY_FACTOR))
 
                     t1 = symbol + ' ' * ((COLUMN_WIDTH // 2) - len(symbol) - rvol_intensity) + ('*' * rvol_intensity) + str(rvol_now[symbol])
                     t2 = (COLUMN_WIDTH // 2) * ' ' + str(rvol_20d[symbol])
@@ -347,7 +347,7 @@ class Vol(object):
         for i in range (0, num_rows):
             
             symbol = rvol_sort[i]
-            rvol_intensity = int(rvol_now[symbol] // INTENSITY_FACTOR)
+            rvol_intensity = min(5, int(rvol_now[symbol] // INTENSITY_FACTOR))
 
             temp = rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(symbol) - rvol_intensity) + '*' * rvol_intensity + str(rvol_now[symbol])
             temp += ' ' * (COLUMN_WIDTH - len(temp))
@@ -361,7 +361,7 @@ class Vol(object):
         for i in range (0, num_rows):
             
             symbol = rvol_sort[i]
-            rvol_intensity = int(rvol_20d[symbol] // INTENSITY_FACTOR)
+            rvol_intensity = min(5, int(rvol_20d[symbol] // INTENSITY_FACTOR))
 
             temp = rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(symbol) - rvol_intensity) + '*' * rvol_intensity + str(rvol_20d[symbol])
             temp += ' ' * (COLUMN_WIDTH - len(temp))

@@ -53,32 +53,22 @@ class Vol(object):
         self.kdb_data = Vol.init_rvol(self)
 
     @classmethod
-    def kdb(cls, query=None):
+    def kdb(cls, query):
         """connect to kdb"""
 
-        kdb = qconnection.QConnection('kdb.genevatrading.com', 8000,
-                                      pandas=True)
-        kdb.open()
+        with qconnection.QConnection('kdb.genevatrading.com', 8000,
+                                     pandas=True) as kdb:
 
-        if query is None:
-
-            return kdb
-
-        return kdb(query)
+            return kdb(query)
 
     @classmethod
-    def rdb(cls, query=None):
+    def rdb(cls, query):
         """Connect to rdb"""
 
-        rdb = qconnection.QConnection('kdb.genevatrading.com', 9218,
-                                      pandas=True)
-        rdb.open()
+        with qconnection.QConnection('kdb.genevatrading.com', 9218,
+                                     pandas=True) as rdb:
 
-        if query is None:
-
-            return rdb
-
-        return rdb(query)
+            return rdb(query)
 
     @classmethod
     def rvol_time(cls):
@@ -299,6 +289,7 @@ class Vol(object):
 
 class Display(object):
     '''terminal print method'''
+
     def __init__(self):
 
         self.sectors = {"Metals": ["GC", "SI", "HG", "PL", "PA"],
@@ -380,15 +371,15 @@ class Display(object):
 
         # Top X Session - format each line and add to the output buffer
         for i in range(0, num_rows):
-    
+
             symbol = rvol_sort[i]
             rvol_intensity = min(5, int(rvol_20d[symbol] // INTENSITY_FACTOR))
-    
+
             temp = (rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(
                     symbol) - rvol_intensity) + '*' * rvol_intensity + str(
                     rvol_20d[symbol]))
             temp += ' ' * (COLUMN_WIDTH - len(temp))
-    
+
             output_buffer[i] += temp
 
         # clear screen and print everything to screen
@@ -518,7 +509,6 @@ class Market(object):
         yday_ohlc['yc'] = _['close'].item()
 
         return yday_ohlc
-
 
     @classmethod
     def upd_price(cls, sym):

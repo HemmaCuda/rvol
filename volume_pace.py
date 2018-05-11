@@ -50,15 +50,6 @@ class Vol(object):
                       'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FGBL', 'KC',
                       'SB', 'CC', 'C']
 
-        self.sectors = {"Metals": ["GC", "SI", "HG", "PL", "PA"],
-                        "Meats": ["LE", "HE", "GF"],
-                        "Energy": ["CL", "RB", "HO", "BRN", "NG"],
-                        "Grains": ["ZC", "ZW", "ZS", "ZM", "ZL", "KE", "MWE"],
-                        "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL"],
-                        "Softs": ["SB", "CT", "KC", "CC", "C"],
-                        "Equities": ["ES", "NQ", "FESX", "RTY", "YM", "EMD",
-                                     "Z"]}
-
         self.kdb_data = Vol.init_rvol(self)
 
     @classmethod
@@ -283,35 +274,60 @@ class Vol(object):
 
             return 0
 
-    def main(self):
-        '''Returns a dict of base : rvol_now pairs'''
+    def get_rvol_now(self):
+        '''Returns a dict of all rvol_now in self.bases'''
 
         rvol_now = dict()
-        rvol_20d = dict()
 
         for base in self.bases:
 
             rvol_now[base] = Vol.rvol_now(base)
+
+        return rvol_now
+
+    def get_rvol_20d(self):
+        '''Returns a dict of all rvol_20d in self.bases'''
+
+        rvol_20d = dict()
+
+        for base in self.bases:
+
             rvol_20d[base] = Vol.rvol_20d(self, base)
 
-        Vol.print_rvol(self, rvol_now, rvol_20d)
+        return rvol_20d
 
-    def print_rvol(self, rvol_now, rvol_20d):
+
+class Display(object):
+    '''terminal print method'''
+    def __init__(self):
+
+        self.sectors = {"Metals": ["GC", "SI", "HG", "PL", "PA"],
+                        "Meats": ["LE", "HE", "GF"],
+                        "Energy": ["CL", "RB", "HO", "BRN", "NG"],
+                        "Grains": ["ZC", "ZW", "ZS", "ZM", "ZL", "KE", "MWE"],
+                        "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL"],
+                        "Softs": ["SB", "CT", "KC", "CC", "C"],
+                        "Equities": ["ES", "NQ", "FESX", "RTY", "YM", "EMD",
+                                     "Z"]}
+
+    # set num_rows to length of the largest sector and initialize the
+    # output_buffer
+
+    def main(self, state, rvol_now, rvol_20d):
         '''Input is a dict with base : rvol pairs, output to terminal'''
-        
-        # set num_rows to length of the largest sector and initialize the output_buffer 
+
         num_rows = 2 * max([len(self.sectors.values())])
         output_buffer = [""] * num_rows
         column_names = ""
         COLUMN_WIDTH = 20
-        INTENSITY_FACTOR = 1.3      
-                
+        INTENSITY_FACTOR = 1.3
+
         for key in self.sectors:
 
             column_names += key + ' ' * (COLUMN_WIDTH - len(key))
 
             for i in range(max([len(self.sectors.values())])):
-                
+
                 t1 = ""
                 t2 = ""
 
@@ -319,18 +335,21 @@ class Vol(object):
                 if i < len(self.sectors[key]):
 
                     symbol = self.sectors[key][i]
-                    rvol_intensity = min(5,int(rvol_now[symbol] // INTENSITY_FACTOR))
+                    rvol_intensity = min(
+                        5, int(rvol_now[symbol] // INTENSITY_FACTOR))
 
-                    t1 = symbol + ' ' * ((COLUMN_WIDTH // 2) - len(symbol) - rvol_intensity) + ('*' * rvol_intensity) + str(rvol_now[symbol])
+                    t1 = (symbol + ' ' * ((COLUMN_WIDTH // 2) - len(
+                        symbol) - rvol_intensity) + (
+                        '*' * rvol_intensity) + str(rvol_now[symbol]))
                     t2 = (COLUMN_WIDTH // 2) * ' ' + str(rvol_20d[symbol])
 
-                # Fill whitespace to align columns   
+                # Fill whitespace to align columns
                 t1 += ' ' * (COLUMN_WIDTH - len(t1))
                 t2 += ' ' * (COLUMN_WIDTH - len(t2))
 
-                output_buffer[i*2] += t1
-                output_buffer[(i*2)+1] += t2
-     
+                output_buffer[i * 2] += t1
+                output_buffer[(i * 2) + 1] += t2
+
         # format column names for Top X Now and Session
         t3 = "Top " + str(num_rows) + " Now"
         t3 += ' ' * (COLUMN_WIDTH - len(t3))
@@ -341,40 +360,44 @@ class Vol(object):
         column_names += t3
 
         # get sorted list of bases from rvol_now
-        rvol_sort = sorted(rvol_now, key=rvol_now.get, reverse = True)
+        rvol_sort = sorted(rvol_now, key=rvol_now.get, reverse=True)
 
         # Top X Now - format each line and add to the output buffer
-        for i in range (0, num_rows):
-            
+        for i in range(0, num_rows):
+
             symbol = rvol_sort[i]
             rvol_intensity = min(5, int(rvol_now[symbol] // INTENSITY_FACTOR))
 
-            temp = rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(symbol) - rvol_intensity) + '*' * rvol_intensity + str(rvol_now[symbol])
+            temp = (rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(
+                symbol) - rvol_intensity) + '*' * rvol_intensity + str(
+                rvol_now[symbol]))
             temp += ' ' * (COLUMN_WIDTH - len(temp))
-            
+
             output_buffer[i] += temp
 
         # get sorted list of bases from rvol_20d
-        rvol_sort = sorted(rvol_20d, key=rvol_20d.get, reverse = True)
+        rvol_sort = sorted(rvol_20d, key=rvol_20d.get, reverse=True)
 
         # Top X Session - format each line and add to the output buffer
-        for i in range (0, num_rows):
-            
+        for i in range(0, num_rows):
+    
             symbol = rvol_sort[i]
             rvol_intensity = min(5, int(rvol_20d[symbol] // INTENSITY_FACTOR))
-
-            temp = rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(symbol) - rvol_intensity) + '*' * rvol_intensity + str(rvol_20d[symbol])
+    
+            temp = (rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(
+                    symbol) - rvol_intensity) + '*' * rvol_intensity + str(
+                    rvol_20d[symbol]))
             temp += ' ' * (COLUMN_WIDTH - len(temp))
-
+    
             output_buffer[i] += temp
 
         # clear screen and print everything to screen
-        print('\n'*50)
+        print('\n' * 50)
 
-        print (datetime.datetime.now().time())
-        print (column_names)
+        print(datetime.datetime.now().time())
+        print(column_names)
         for line in output_buffer:
-            print (line)
+            print(line)
 
 
 class Market(object):
@@ -390,11 +413,17 @@ class Market(object):
 
         self.front_months = Market.get_front_months(self)
 
-        self.yday_ohlc = dict()
+        self.yday_ohlc_sym = dict()
 
-        for sym in self.front_months.items():
+        for key, value in self.front_months.items():
 
-            self.yday_ohlc[sym] = Market.get_yday_ohlc(sym)
+            self.yday_ohlc_sym[value] = Market.get_yday_ohlc(value)
+
+        self.yday_ohlc_base = dict()
+
+        for key, value in self.front_months.items():
+
+            self.yday_ohlc_base[key] = self.yday_ohlc_sym[value]
 
     def get_front_months(self):
         """Returns a dict of base : syms,
@@ -478,7 +507,7 @@ class Market(object):
         # assumes last row in dailybar is last trade day
 
         _ = Vol.kdb('-1# select date, open, high, low, close'
-                    ' from dailybar where sym = `$"{}"'
+                    ' from dailybar where date = .z.D - 1, sym = `$"{}"'
                     .format(sym))
 
         yday_ohlc = dict()
@@ -489,6 +518,38 @@ class Market(object):
         yday_ohlc['yc'] = _['close'].item()
 
         return yday_ohlc
+
+
+    @classmethod
+    def upd_price(cls, sym):
+        """docstring"""
+
+        return Vol.rdb('-1# select close from bar where sym ='
+                       '`$"{}"'.format(sym))['close'].item()
+
+    def get_state(self):
+        '''returns a dict of base:1, 0, -1 where 1 is above YH,
+        0 is between YH and YL, and -1 is below YL'''
+
+        state = dict()
+
+        for key, value in self.front_months.items():
+
+            price = Market.upd_price(value)
+
+            if price > self.yday_ohlc_base[key]['yh']:
+
+                state[key] = 1
+
+            elif price < self.yday_ohlc_base[key]['yl']:
+
+                state[key] = -1
+
+            else:
+
+                state[key] = 0
+
+        return state
 
 
 class Alert(object):
@@ -709,7 +770,18 @@ class Alert(object):
 if __name__ == '__main__':
 
     ex = Vol()
+    ex2 = Market()
+    ex3 = Display()
+
+    def main():
+        '''Returns a dict of base : rvol_now pairs'''
+
+        rvol_now = ex.get_rvol_now()
+        rvol_20d = ex.get_rvol_20d()
+        state = ex2.get_state()
+
+        ex3.main(state, rvol_now, rvol_20d)
 
     while True:
 
-        ex.main()
+        main()

@@ -328,7 +328,7 @@ class Display(object):
                 if i < len(self.sectors[key]):
 
                     symbol = self.sectors[key][i]
-                    try: 
+                    try:
                         state = states[symbol]
                     except:
                         pass
@@ -345,7 +345,7 @@ class Display(object):
                 t1 += ' ' * (COLUMN_WIDTH - len(t1))
                 t2 += ' ' * (COLUMN_WIDTH - len(t2))
 
-                print (symbol, state)
+                print(symbol, state)
                 if state != None:
                     t1, t2 = Display.format_colors(states[symbol], t1, t2)
 
@@ -400,8 +400,11 @@ class Display(object):
         print(column_names)
         for line in output_buffer:
             print(line)
-    
-    def format_colors(state, t1, t2):
+
+    @classmethod
+    def format_colors(cls, state, t1, t2):
+        '''docstring'''
+
         if state == 1:
             return (Fore.GREEN + t1 + Fore.WHITE), (Fore.GREEN + t2 + Fore.WHITE)
         elif state == -1:
@@ -517,7 +520,8 @@ class Market(object):
         # assumes last row in dailybar is last trade day
 
         _ = Vol.kdb('-1# select date, open, high, low, close'
-                    ' from dailybar where date = .z.D - 1, sym = `$"{}"'
+                    ' from dailybar where date within((.z.D - 4); (.z.D - 1))'
+                    ', sym = `$"{}"'
                     .format(sym))
 
         yday_ohlc = dict()
@@ -780,7 +784,7 @@ if __name__ == '__main__':
 
     # initialize colorama
     init()
-    
+
     ex = Vol()
     ex2 = Market()
     ex3 = Display()

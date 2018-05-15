@@ -345,7 +345,6 @@ class Display(object):
                 t1 += ' ' * (COLUMN_WIDTH - len(t1))
                 t2 += ' ' * (COLUMN_WIDTH - len(t2))
 
-                print(symbol, state)
                 if state != None:
                     t1, t2 = Display.format_colors(states[symbol], t1, t2)
 

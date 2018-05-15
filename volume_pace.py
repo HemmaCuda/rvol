@@ -10,6 +10,7 @@ from twilio.rest import Client
 import pandas as pd
 import numpy as np
 from qpython import qconnection
+from colorama import init, Fore
 
 # Bugs
 # If realtime crashes this is fucked for the day
@@ -304,7 +305,7 @@ class Display(object):
     # set num_rows to length of the largest sector and initialize the
     # output_buffer
 
-    def main(self, state, rvol_now, rvol_20d):
+    def main(self, states, rvol_now, rvol_20d):
         '''Input is a dict with base : rvol pairs, output to terminal'''
 
         num_rows = 2 * max([len(self.sectors.values())])
@@ -321,11 +322,17 @@ class Display(object):
 
                 t1 = ""
                 t2 = ""
+                state = None
 
                 # append each key value pair to the corresponding row
                 if i < len(self.sectors[key]):
 
                     symbol = self.sectors[key][i]
+                    try: 
+                        state = states[symbol]
+                    except:
+                        pass
+
                     rvol_intensity = min(
                         5, int(rvol_now[symbol] // INTENSITY_FACTOR))
 
@@ -337,6 +344,10 @@ class Display(object):
                 # Fill whitespace to align columns
                 t1 += ' ' * (COLUMN_WIDTH - len(t1))
                 t2 += ' ' * (COLUMN_WIDTH - len(t2))
+
+                print (symbol, state)
+                if state != None:
+                    t1, t2 = Display.format_colors(states[symbol], t1, t2)
 
                 output_buffer[i * 2] += t1
                 output_buffer[(i * 2) + 1] += t2
@@ -389,6 +400,14 @@ class Display(object):
         print(column_names)
         for line in output_buffer:
             print(line)
+    
+    def format_colors(state, t1, t2):
+        if state == 1:
+            return (Fore.GREEN + t1 + Fore.WHITE), (Fore.GREEN + t2 + Fore.WHITE)
+        elif state == -1:
+            return (Fore.RED + t1 + Fore.WHITE), (Fore.RED + t2 + Fore.WHITE)
+        else:
+            return t1, t2
 
 
 class Market(object):
@@ -759,6 +778,9 @@ class Alert(object):
 
 if __name__ == '__main__':
 
+    # initialize colorama
+    init()
+    
     ex = Vol()
     ex2 = Market()
     ex3 = Display()

@@ -1,4 +1,4 @@
-"""docstring"""
+"""Calculates real time rvol and 20 day historical for select base:sym pairs"""
 
 import random
 import datetime
@@ -12,36 +12,11 @@ import numpy as np
 from qpython import qconnection
 from colorama import init, Fore
 
-# Bugs
-# If realtime crashes this is fucked for the day
-# Rvol logic breaks after 3pm
-# Need to estimate the days range in prices
-# Need to be alerted to which products are near highs/lows
-# Need to be alerts to an opening gap in prices
-
-# check bars in a day to verify data integrity, throw out if not
-# write test for first and last row
-
-# Performance
-# ltime slows this script down 10x (1s to 10s)
-
-# Feature Requests
-# Remove outliers
-# Write tests
-# I think I need to refactor the code for overnite rvol
-
-# Structure
-# Workers get price, update state, generate signals
-
-# What will make me the most money
-# Multiple Rvols?
-# Being able to pass command line args
-# Sorting bases into sectors
-# Let's see if I can get multiple Rvols done
+# pylint: disable-msg=C0103
 
 
-class Vol(object):
-    """docstring"""
+class Rvol(object):
+    """Calculates and stores rvol"""
 
     def __init__(self):
 
@@ -51,7 +26,7 @@ class Vol(object):
                       'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FGBL', 'KC',
                       'SB', 'CC', 'C']
 
-        self.kdb_data = Vol.init_rvol(self)
+        self.kdb_data = Rvol.init_rvol(self)
 
     @classmethod
     def kdb(cls, query):
@@ -93,8 +68,8 @@ class Vol(object):
 
     @classmethod
     def last_20_trade_days(cls):
-        '''Returns a string of the start and stop dates for last 20 trade days
-        in the kdb format YYYY.MM.DD'''
+        """Returns a string of the start and stop dates for last 20 trade days
+        in the kdb format YYYY.MM.DD"""
 
         today = datetime.datetime.now()
         yday = today - datetime.timedelta(days=1)
@@ -111,9 +86,9 @@ class Vol(object):
         return start, stop
 
     def init_rvol(self):
-        """docstring"""
+        """Fetches the historical startup data from KDB"""
 
-        start, stop = Vol.last_20_trade_days()
+        start, stop = Rvol.last_20_trade_days()
 
         FILEPATH = 'rvol.pickle'
 
@@ -140,17 +115,17 @@ class Vol(object):
 
                 kdb_data[i] = dict()
 
-                Vol.kdb('t: select sum volume by 0D00:05:00 xbar'
-                        ' utc_datetime, date from trade where '
-                        'date within ({}; {}), base= `$"{}", '
-                        'not sym like "*-*", null trade_type'
-                        .format(start, stop, i))
+                Rvol.kdb('t: select sum volume by 0D00:05:00 xbar'
+                         ' utc_datetime, date from trade where '
+                         'date within ({}; {}), base= `$"{}", '
+                         'not sym like "*-*", null trade_type'
+                         .format(start, stop, i))
 
                 for k, v in RVOL_TIMES.items():
 
-                    kdb_data[i][k] = Vol.kdb('select from t where '
-                                             '(ltime utc_datetime) within ({})'
-                                             .format(v))
+                    kdb_data[i][k] = Rvol.kdb('select from t where '
+                                              '(ltime utc_datetime) within ({})'
+                                              .format(v))
 
             with open(FILEPATH, 'wb') as file:
                 pickle.dump(kdb_data, file)
@@ -164,22 +139,22 @@ class Vol(object):
 
     @classmethod
     def nearest_15m_vol(cls, base):
-        '''Volume in nearest Noncontinuous 15m bar'''
+        """Rvolume in nearest Noncontinuous 15m bar"""
 
         now = datetime.datetime.now().time()
 
         now = (now.replace(minute=(5 * (now.minute // 5)))
                .strftime('%H:%M'))
 
-        rvol_time = list(Vol.rvol_time().values())[0][0:5]
+        rvol_time = list(Rvol.rvol_time().values())[0][0:5]
 
-        data = Vol.rdb('select sum volume by `date$utc_datetime'
-                       ' from bar where (`date$utc_datetime)'
-                       ' = (`date$.z.z),'
-                       ' base = `$"{}", not sym like "*-*", '
-                       '((`time$(ltime utc_datetime)) within (('
-                       '`time${}:00); (`time${}:00)))'
-                       .format(base, rvol_time, now))
+        data = Rvol.rdb('select sum volume by `date$utc_datetime'
+                        ' from bar where (`date$utc_datetime)'
+                        ' = (`date$.z.z),'
+                        ' base = `$"{}", not sym like "*-*", '
+                        '((`time$(ltime utc_datetime)) within (('
+                        '`time${}:00); (`time${}:00)))'
+                        .format(base, rvol_time, now))
         try:
 
             return data['volume'].item()
@@ -189,9 +164,9 @@ class Vol(object):
             return 0
 
     def nearest_15m_20d_vol_avg(self, base):
-        '''docstring'''
+        """Calculates the 15m historical average over the last 20 days"""
 
-        cur_sesh = list(Vol.rvol_time().keys())[0]
+        cur_sesh = list(Rvol.rvol_time().keys())[0]
 
         utc = datetime.datetime.utcnow().time().strftime('%H:%M')
 
@@ -204,9 +179,9 @@ class Vol(object):
     def rvol_20d(self, base):
         """Calculates the 20d Rvol to the nearest 5 minute bar"""
 
-        today = Vol.nearest_15m_vol(base)
+        today = Rvol.nearest_15m_vol(base)
 
-        avg_20d = Vol.nearest_15m_20d_vol_avg(self, base)
+        avg_20d = Rvol.nearest_15m_20d_vol_avg(self, base)
 
         rvol_20d = round((today / avg_20d), 2)
 
@@ -217,31 +192,31 @@ class Vol(object):
 
     @classmethod
     def last_15m_vol(cls, base):
-        '''Volume in continuous previous 15 minutes'''
+        """Rvolume in continuous previous 15 minutes"""
 
-        td_15m = Vol.rdb('-1# select sum volume from bar where '
-                         '(`date$utc_datetime) = (`date$.z.z), '
-                         'base = `$"{}", not sym like "*-*",'
-                         ' (`time$utc_datetime) < (`time$.z.z),'
-                         ' (`time$utc_datetime) > ((`time$.z.z) '
-                         '- 00:15:00)'
-                         .format(base))
+        td_15m = Rvol.rdb('-1# select sum volume from bar where '
+                          '(`date$utc_datetime) = (`date$.z.z), '
+                          'base = `$"{}", not sym like "*-*",'
+                          ' (`time$utc_datetime) < (`time$.z.z),'
+                          ' (`time$utc_datetime) > ((`time$.z.z) '
+                          '- 00:15:00)'
+                          .format(base))
 
         return td_15m['volume'].item()
 
     @classmethod
     def last_20d_15m_vol(cls, base):
-        '''Mean volume in continuous previous 15 minutes for last 20 days'''
+        """Mean volume in continuous previous 15 minutes for last 20 days"""
 
-        first, last = Vol.date_rn_last_20d()
+        first, last = Rvol.date_rn_last_20d()
 
-        data = Vol.kdb('select sum volume by date'
-                       ' from trade where date within ({}'
-                       ';{}), base=`$"{}", not sym like'
-                       ' "*-*", (`time$utc_datetime) < '
-                       '(`time$.z.z) ,(`time$utc_datetime'
-                       ') > ((`time$.z.z) - 00:15:00), null trade_type'
-                       .format(first, last, base))
+        data = Rvol.kdb('select sum volume by date'
+                        ' from trade where date within ({}'
+                        ';{}), base=`$"{}", not sym like'
+                        ' "*-*", (`time$utc_datetime) < '
+                        '(`time$.z.z) ,(`time$utc_datetime'
+                        ') > ((`time$.z.z) - 00:15:00), null trade_type'
+                        .format(first, last, base))
 
         try:
 
@@ -253,7 +228,7 @@ class Vol(object):
 
     @classmethod
     def date_rn_last_20d(cls):
-        '''Returns first and last date for the previous 20 business days'''
+        """Returns first and last date for the previous 20 business days"""
 
         yday = datetime.datetime.now() - datetime.timedelta(days=1)
 
@@ -268,9 +243,9 @@ class Vol(object):
     def rvol_now(cls, base):
         """Rolling 15m volume vs average of last 20 days"""
 
-        td_15m = Vol.last_15m_vol(base)
+        td_15m = Rvol.last_15m_vol(base)
 
-        avg_15m_20d = Vol.last_20d_15m_vol(base)
+        avg_15m_20d = Rvol.last_20d_15m_vol(base)
 
         try:
 
@@ -281,30 +256,30 @@ class Vol(object):
             return 0
 
     def get_rvol_now(self):
-        '''Returns a dict of all rvol_now in self.bases'''
+        """Returns a dict of all rvol_now in self.bases"""
 
         rvol_now = dict()
 
         for base in self.bases:
 
-            rvol_now[base] = Vol.rvol_now(base)
+            rvol_now[base] = Rvol.rvol_now(base)
 
         return rvol_now
 
     def get_rvol_20d(self):
-        '''Returns a dict of all rvol_20d in self.bases'''
+        """Returns a dict of all rvol_20d in self.bases"""
 
         rvol_20d = dict()
 
         for base in self.bases:
 
-            rvol_20d[base] = Vol.rvol_20d(self, base)
+            rvol_20d[base] = Rvol.rvol_20d(self, base)
 
         return rvol_20d
 
 
 class Display(object):
-    '''terminal print method'''
+    """terminal print method"""
 
     def __init__(self):
 
@@ -321,7 +296,7 @@ class Display(object):
     # output_buffer
 
     def main(self, states, rvol_now, rvol_20d):
-        '''Input is a dict with base : rvol pairs, output to terminal'''
+        """Input is a dict with base : rvol pairs, output to terminal"""
 
         num_rows = 2 * max([len(self.sectors.values())])
         output_buffer = [""] * num_rows
@@ -345,22 +320,27 @@ class Display(object):
                     symbol = self.sectors[key][i]
                     try:
                         state = states[symbol]
-                    except:
+                    except KeyError:
                         pass
 
                     rvol_intensity = min(
                         5, int(rvol_now[symbol] // INTENSITY_FACTOR))
 
-                    t1 = (symbol + ' ' * ((COLUMN_WIDTH // 2) - len(
-                        symbol) - rvol_intensity) + (
-                        '*' * rvol_intensity) + str(rvol_now[symbol]))
+                    t1 = (symbol
+                          + ' '
+                          * ((COLUMN_WIDTH // 2)
+                             - len(symbol)
+                             - rvol_intensity)
+                          + ('*' * rvol_intensity)
+                          + str(rvol_now[symbol]))
+
                     t2 = (COLUMN_WIDTH // 2) * ' ' + str(rvol_20d[symbol])
 
                 # Fill whitespace to align columns
                 t1 += ' ' * (COLUMN_WIDTH - len(t1))
                 t2 += ' ' * (COLUMN_WIDTH - len(t2))
 
-                if state != None:
+                if state is not None:
                     t1, t2 = Display.format_colors(states[symbol], t1, t2)
 
                 output_buffer[i * 2] += t1
@@ -384,9 +364,15 @@ class Display(object):
             symbol = rvol_sort[i]
             rvol_intensity = min(5, int(rvol_now[symbol] // INTENSITY_FACTOR))
 
-            temp = (rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(
-                symbol) - rvol_intensity) + '*' * rvol_intensity + str(
-                rvol_now[symbol]))
+            temp = (rvol_sort[i]
+                    + ' '
+                    * ((COLUMN_WIDTH // 2)
+                       - len(symbol)
+                       - rvol_intensity)
+                    + '*'
+                    * rvol_intensity
+                    + str(rvol_now[symbol]))
+
             temp += ' ' * (COLUMN_WIDTH - len(temp))
 
             output_buffer[i] += temp
@@ -400,9 +386,15 @@ class Display(object):
             symbol = rvol_sort[i]
             rvol_intensity = min(5, int(rvol_20d[symbol] // INTENSITY_FACTOR))
 
-            temp = (rvol_sort[i] + ' ' * ((COLUMN_WIDTH // 2) - len(
-                    symbol) - rvol_intensity) + '*' * rvol_intensity + str(
-                    rvol_20d[symbol]))
+            temp = (rvol_sort[i]
+                    + ' '
+                    * ((COLUMN_WIDTH // 2)
+                       - len(symbol)
+                       - rvol_intensity)
+                    + '*'
+                    * rvol_intensity
+                    + str(rvol_20d[symbol]))
+
             temp += ' ' * (COLUMN_WIDTH - len(temp))
 
             output_buffer[i] += temp
@@ -417,7 +409,7 @@ class Display(object):
 
     @classmethod
     def format_colors(cls, state, t1, t2):
-        '''docstring'''
+        """docstring"""
 
         if state == 1:
             return ((Fore.GREEN + t1 + Fore.WHITE),
@@ -428,7 +420,7 @@ class Display(object):
 
 
 class Market(object):
-    '''Generic base/sym data'''
+    """Generic base/sym data"""
 
     def __init__(self):
 
@@ -470,9 +462,9 @@ class Market(object):
 
         for i in self.bases:
 
-            _ = Vol.kdb('select date, sym from dailybar where date = {},'
-                        'base = `{}, volume = max volume, not sym like '
-                        '"*-*"'.format(yday_str, i))
+            _ = Rvol.kdb('select date, sym from dailybar where date = {},'
+                         'base = `{}, volume = max volume, not sym like '
+                         '"*-*"'.format(yday_str, i))
 
             while _.empty:
 
@@ -481,9 +473,9 @@ class Market(object):
 
                 count += 1
 
-                _ = Vol.kdb('select date, sym from dailybar where date = {},'
-                            'base = `{}, volume = max volume, not sym like '
-                            '"*-*"'.format(temp, i))
+                _ = Rvol.kdb('select date, sym from dailybar where date = {},'
+                             'base = `{}, volume = max volume, not sym like '
+                             '"*-*"'.format(temp, i))
 
                 # Try a max of 5 days
 
@@ -533,10 +525,10 @@ class Market(object):
 
         # assumes last row in dailybar is last trade day
 
-        _ = Vol.kdb('-1# select date, open, high, low, close'
-                    ' from dailybar where date within((.z.D - 4); (.z.D - 1))'
-                    ', sym = `$"{}"'
-                    .format(sym))
+        _ = Rvol.kdb('-1# select date, open, high, low, close'
+                     ' from dailybar where date within((.z.D - 4); (.z.D - 1))'
+                     ', sym = `$"{}"'
+                     .format(sym))
 
         yday_ohlc = dict()
 
@@ -551,12 +543,12 @@ class Market(object):
     def upd_price(cls, sym):
         """docstring"""
 
-        return Vol.rdb('-1# select close from bar where sym ='
-                       '`$"{}"'.format(sym))['close'].item()
+        return Rvol.rdb('-1# select close from bar where sym ='
+                        '`$"{}"'.format(sym))['close'].item()
 
     def get_state(self):
-        '''returns a dict of base:1, 0, -1 where 1 is above YH,
-        0 is between YH and YL, and -1 is below YL'''
+        """returns a dict of base:1, 0, -1 where 1 is above YH,
+        0 is between YH and YL, and -1 is below YL"""
 
         state = dict()
 
@@ -580,7 +572,7 @@ class Market(object):
 
 
 class Alert(object):
-    '''Multithreaded sms alert system'''
+    """Multithreaded sms alert system"""
 
     def __init__(self):
 
@@ -594,15 +586,15 @@ class Alert(object):
     def upd_price(cls, sym):
         """docstring"""
 
-        return Vol.rdb('-1# select close from bar where sym ='
-                       '`$"{}"'.format(sym))['close'].item()
+        return Rvol.rdb('-1# select close from bar where sym ='
+                        '`$"{}"'.format(sym))['close'].item()
 
     @classmethod
     def test_rdb(cls):
         """docstring"""
 
-        _ = Vol.rdb('-1# select close by ltime utc_datetime from bar'
-                    ' where base = `ES')
+        _ = Rvol.rdb('-1# select close by ltime utc_datetime from bar'
+                     ' where base = `ES')
 
         # Test updates for real time
 
@@ -650,7 +642,7 @@ class Alert(object):
 
                 body = 'single_outside_rvol'
 
-                # Vol.send_sms(sym, body)
+                # Rvol.send_sms(sym, body)
 
                 print(wrkr_args['sym'], body)
 
@@ -663,7 +655,7 @@ class Alert(object):
 
                 body = 'double_outside_rvol'
 
-                # Vol.send_sms(sym, body)
+                # Rvol.send_sms(sym, body)
 
                 print(wrkr_args['sym'], body)
 
@@ -706,9 +698,9 @@ class Alert(object):
 
         wrkr_args = list()
 
-        # Import KDB data from Vol class
+        # Import KDB data from Rvol class
 
-        rvol = Vol()
+        rvol = Rvol()
 
         for key, value in basesyms.items():
             wrkr_args.append({'base': key, 'sym': value})
@@ -747,7 +739,7 @@ class Alert(object):
 
     @classmethod
     def upd_rvol(cls, base, kdb_data):
-        '''docstring'''
+        """docstring"""
 
         # Multi threaded
 
@@ -758,13 +750,13 @@ class Alert(object):
 
         # Calculate
 
-        _ = Vol.rdb('select sum volume by `date$utc_datetime'
-                    ' from bar where (`date$utc_datetime)'
-                    ' = (`date$.z.z),'
-                    ' base = `$"{}", not sym like "*-*", '
-                    '((`time$(ltime utc_datetime)) within (('
-                    '`time$07:00:00); (`time${}:00)))'
-                    .format(base, now))
+        _ = Rvol.rdb('select sum volume by `date$utc_datetime'
+                     ' from bar where (`date$utc_datetime)'
+                     ' = (`date$.z.z),'
+                     ' base = `$"{}", not sym like "*-*", '
+                     '((`time$(ltime utc_datetime)) within (('
+                     '`time$07:00:00); (`time${}:00)))'
+                     .format(base, now))
 
         tday_cum = _['volume'].sum()
 
@@ -799,12 +791,12 @@ if __name__ == '__main__':
     # initialize colorama
     init()
 
-    ex = Vol()
+    ex = Rvol()
     ex2 = Market()
     ex3 = Display()
 
     def main():
-        '''Returns a dict of base : rvol_now pairs'''
+        """Returns a dict of base : rvol_now pairs"""
 
         rvol_now = ex.get_rvol_now()
         rvol_20d = ex.get_rvol_20d()

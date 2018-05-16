@@ -73,26 +73,28 @@ class Vol(object):
 
     @classmethod
     def rvol_time(cls):
-        """Returns the desired rvol session"""
+        """Returns a dict of name of the current rvol sessio : time"""
 
         now = datetime.datetime.now().time()
 
         if datetime.time(6, 0) <= now <= datetime.time(10, 29, 59):
 
-            return '06:00; 10:29'
+            return {'am': '06:00; 10:29'}
 
         elif datetime.time(10, 30) <= now <= datetime.time(16, 59, 59):
 
-            return '10:30; 16:59'
+            return {'pm': '10:30; 16:59'}
 
         elif datetime.time(17, 0) <= now <= datetime.time(23, 59, 59):
 
-            return '17:00; 23:59'
+            return {'asia': '17:00; 23:59'}
 
-        return '24:00; 05:59'
+        return {'euro': '24:00; 05:59'}
 
-    def init_rvol(self):
-        """docstring"""
+    @classmethod
+    def last_20_trade_days(cls):
+        '''Returns a string of the start and stop dates for last 20 trade days
+        in the kdb format YYYY.MM.DD'''
 
         today = datetime.datetime.now()
         yday = today - datetime.timedelta(days=1)
@@ -106,38 +108,51 @@ class Vol(object):
         start = _.min().strftime('%Y.%m.%d')
         stop = _.max().strftime('%Y.%m.%d')
 
-        filepath = 'rvol.pickle'
+        return start, stop
+
+    def init_rvol(self):
+        """docstring"""
+
+        start, stop = Vol.last_20_trade_days()
+
+        FILEPATH = 'rvol.pickle'
 
         kdb_data = dict()
 
-        rvol_time = Vol.rvol_time()
+        RVOL_TIMES = {'am': '06:00; 10:29',
+                      'pm': '10:30; 16:59',
+                      'asia': '17:00; 23:59',
+                      'euro': '24:00; 05:59'}
 
-        if os.path.exists(filepath):
+        if os.path.exists(FILEPATH):
 
-            get_file_date = time.ctime(os.path.getctime(filepath))
+            get_file_date = time.ctime(os.path.getctime(FILEPATH))
 
             file_datetime = datetime.datetime.strptime(
                 get_file_date, "%a %b %d %H:%M:%S %Y")
 
-        if (not os.path.exists(filepath) or
-                file_datetime.date() != today.date() or not
-                (rvol_time[0:5] < file_datetime.time().strftime('%H:%M')
-                 < rvol_time[8:13])):
+        if (not os.path.exists(FILEPATH) or
+                file_datetime.date() != datetime.datetime.now().date()):
 
             for i in self.bases:
 
-                kdb_data[i] = Vol.kdb('t: select sum volume by 0D00:05:00 xbar'
-                                      ' utc_datetime, date '
-                                      'from trade where date within ({}; {}), '
-                                      'base = `$"{}", not sym like "*-*", '
-                                      'null trade_type; '
-                                      'select from t where (ltime utc_datetime'
-                                      ') within ({})'
-                                      .format(start, stop, i, rvol_time))
-
                 print('Initializing Rvol:', i)
 
-            with open(filepath, 'wb') as file:
+                kdb_data[i] = dict()
+
+                Vol.kdb('t: select sum volume by 0D00:05:00 xbar'
+                        ' utc_datetime, date from trade where '
+                        'date within ({}; {}), base= `$"{}", '
+                        'not sym like "*-*", null trade_type'
+                        .format(start, stop, i))
+
+                for k, v in RVOL_TIMES.items():
+
+                    kdb_data[i][k] = Vol.kdb('select from t where '
+                                             '(ltime utc_datetime) within ({})'
+                                             .format(v))
+
+            with open(FILEPATH, 'wb') as file:
                 pickle.dump(kdb_data, file)
 
         else:
@@ -156,7 +171,7 @@ class Vol(object):
         now = (now.replace(minute=(5 * (now.minute // 5)))
                .strftime('%H:%M'))
 
-        rvol_time = Vol.rvol_time()[0:5]
+        rvol_time = list(Vol.rvol_time().values())[0][0:5]
 
         data = Vol.rdb('select sum volume by `date$utc_datetime'
                        ' from bar where (`date$utc_datetime)'
@@ -176,13 +191,13 @@ class Vol(object):
     def nearest_15m_20d_vol_avg(self, base):
         '''docstring'''
 
-        # yday_vol code, requires ValueError exception
-        # yday_vol = datesum['volume'].loc[datesum.idxmax()].item()
+        cur_sesh = list(Vol.rvol_time().keys())[0]
 
         utc = datetime.datetime.utcnow().time().strftime('%H:%M')
 
-        cut = self.kdb_data[base].loc[
-            self.kdb_data[base].index.levels[0].strftime('%H:%M') < utc]
+        cut = self.kdb_data[base][cur_sesh].loc[
+            self.kdb_data[base][cur_sesh].index.levels[0]
+            .strftime('%H:%M') < utc]
 
         return cut.groupby(by='date').sum().mean().item()
 
@@ -345,7 +360,6 @@ class Display(object):
                 t1 += ' ' * (COLUMN_WIDTH - len(t1))
                 t2 += ' ' * (COLUMN_WIDTH - len(t2))
 
-                print(symbol, state)
                 if state != None:
                     t1, t2 = Display.format_colors(states[symbol], t1, t2)
 
@@ -406,11 +420,11 @@ class Display(object):
         '''docstring'''
 
         if state == 1:
-            return (Fore.GREEN + t1 + Fore.WHITE), (Fore.GREEN + t2 + Fore.WHITE)
+            return ((Fore.GREEN + t1 + Fore.WHITE),
+                    (Fore.GREEN + t2 + Fore.WHITE))
         elif state == -1:
             return (Fore.RED + t1 + Fore.WHITE), (Fore.RED + t2 + Fore.WHITE)
-        else:
-            return t1, t2
+        return t1, t2
 
 
 class Market(object):

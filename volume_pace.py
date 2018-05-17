@@ -21,11 +21,11 @@ class Rvol(object):
     def __init__(self):
 
         self.bases = ['GC', 'SI', 'HG', 'PA', 'PL', 'LE', 'HE', 'GF', 'CL',
-                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'ZL',
+                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'GE', 'ZL',
                       'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'MWE', 'ES', 'TF',
-                      'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FGBL', 'KC',
-                      'SB', 'CC', 'C']
-
+                      'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
+                      'SB', 'CC', 'C', 'DX', '6E', '6J', '6C', '6M', '6A']
+        
         self.kdb_data = Rvol.init_rvol(self)
 
     @classmethod
@@ -284,12 +284,13 @@ class Display(object):
     def __init__(self):
 
         self.sectors = {"Metals": ["GC", "SI", "HG", "PL", "PA"],
-                        "Meats": ["LE", "HE", "GF"],
                         "Energy": ["CL", "RB", "HO", "BRN", "NG"],
+                        "Meats": ["LE", "HE", "GF"],                        
                         "Grains": ["ZC", "ZW", "ZS", "ZM", "ZL", "KE", "MWE"],
-                        "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL"],
                         "Softs": ["SB", "CT", "KC", "CC", "C"],
-                        "Equities": ["ES", "NQ", "FESX", "RTY", "YM", "EMD",
+                        "Currencies": ["DX", "6E", "6J", "6C", "6M", "6A"],
+                        "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL", "FBTP", "GE"],                    
+                        "Equities": ["ES", "NQ", "FESX", "FDAX","NIY", "RTY", "YM", "EMD",
                                      "Z"]}
 
     # set num_rows to length of the largest sector and initialize the
@@ -427,10 +428,10 @@ class Market(object):
     def __init__(self):
 
         self.bases = ['GC', 'SI', 'HG', 'PA', 'PL', 'LE', 'HE', 'GF', 'CL',
-                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'ZL',
+                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'GE', 'ZL',
                       'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'MWE', 'ES', 'TF',
-                      'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FGBL', 'KC',
-                      'SB', 'CC', 'C']
+                      'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX','FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
+                      'SB', 'CC', 'C', 'DX', '6E', '6J', '6C', '6M', '6A']
 
         self.front_months = Market.get_front_months(self)
 
@@ -577,12 +578,12 @@ class Alert(object):
     """Multithreaded sms alert system"""
 
     def __init__(self):
-
+        
         self.bases = ['GC', 'SI', 'HG', 'PA', 'PL', 'LE', 'HE', 'GF', 'CL',
-                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'ZL',
+                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'GE', 'ZL',
                       'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'MWE', 'ES', 'TF',
-                      'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FGBL', 'KC',
-                      'SB', 'CC', 'C']
+                      'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX','FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
+                      'SB', 'CC', 'C', 'DX', '6E', '6J', '6C', '6M', '6A']
 
     @classmethod
     def upd_price(cls, sym):

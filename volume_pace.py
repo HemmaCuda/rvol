@@ -341,7 +341,8 @@ class Display(object):
                 t2 += ' ' * (COLUMN_WIDTH - len(t2))
 
                 if state is not None:
-                    t1, t2 = Display.format_colors(states[symbol], t1, t2)
+                    t1 = Display.format_colors(states[symbol], t1)
+                    t2 = Display.format_colors(states[symbol], t2)
 
                 output_buffer[i * 2] += t1
                 output_buffer[(i * 2) + 1] += t2
@@ -374,6 +375,7 @@ class Display(object):
                     + str(rvol_now[symbol]))
 
             temp += ' ' * (COLUMN_WIDTH - len(temp))
+            temp = Display.format_colors(states[symbol], temp)
 
             output_buffer[i] += temp
 
@@ -396,6 +398,7 @@ class Display(object):
                     + str(rvol_20d[symbol]))
 
             temp += ' ' * (COLUMN_WIDTH - len(temp))
+            temp = Display.format_colors(states[symbol], temp)
 
             output_buffer[i] += temp
 
@@ -408,15 +411,14 @@ class Display(object):
             print(line)
 
     @classmethod
-    def format_colors(cls, state, t1, t2):
+    def format_colors(cls, state, temp):
         """docstring"""
 
         if state == 1:
-            return ((Fore.GREEN + t1 + Fore.WHITE),
-                    (Fore.GREEN + t2 + Fore.WHITE))
+            return (Fore.GREEN + temp + Fore.WHITE)
         elif state == -1:
-            return (Fore.RED + t1 + Fore.WHITE), (Fore.RED + t2 + Fore.WHITE)
-        return t1, t2
+            return (Fore.RED + temp + Fore.WHITE)
+        return temp
 
 
 class Market(object):

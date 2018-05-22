@@ -125,7 +125,8 @@ class Rvol(object):
                 for k, v in RVOL_TIMES.items():
 
                     kdb_data[i][k] = Rvol.kdb('select from t where '
-                                              '(ltime utc_datetime) within ({})'
+                                              '(ltime utc_datetime) '
+                                              'within ({})'
                                               .format(v))
 
             with open(FILEPATH, 'wb') as file:
@@ -289,7 +290,8 @@ class Display(object):
                         "Grains": ["ZC", "ZW", "ZS", "ZM", "ZL", "KE"],
                         "Softs": ["SB", "CT", "KC", "RC", "CC", "C"],
                         "Currencies": ["DX", "6E", "6J", "6C", "6M", "6A"],
-                        "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL", "R", "FOAT", "FBTP", "GE"],
+                        "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL", "R", "FOAT",
+                                  "FBTP", "GE"],
                         "US Equities": ["ES", "NQ", "YM", "RTY", "EMD"],
                         "Equities": ["FESX", "FDAX", "NIY", "Z", "MME"]}
 
@@ -416,9 +418,9 @@ class Display(object):
         """docstring"""
 
         if state == 1:
-            return (Fore.GREEN + temp + Fore.WHITE)
+            return Fore.GREEN + temp + Fore.WHITE
         elif state == -1:
-            return (Fore.RED + temp + Fore.WHITE)
+            return Fore.RED + temp + Fore.WHITE
         return temp
 
 
@@ -543,6 +545,14 @@ class Market(object):
         yday_ohlc['yc'] = _['close'].item()
 
         return yday_ohlc
+
+    @classmethod
+    def get_status(cls, sym):
+        """inputs a sym and returns a string indicating
+        market status from RDB"""
+
+        return Rvol.kdb('select status from status where sym = `$"{}"'
+                        .format(sym))['status'].item().decode('utf8')
 
     @classmethod
     def upd_price(cls, sym):

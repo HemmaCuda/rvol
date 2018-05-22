@@ -25,7 +25,7 @@ class Rvol(object):
                       'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'MWE', 'ES', 'TF',
                       'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
                       'SB', 'CC', 'C', 'DX', '6E', '6J', '6C', '6M', '6A']
-        
+
         self.kdb_data = Rvol.init_rvol(self)
 
     @classmethod
@@ -150,7 +150,7 @@ class Rvol(object):
 
         data = Rvol.rdb('select sum volume by `date$utc_datetime'
                         ' from bar where (`date$utc_datetime)'
-                        ' = (`date$.z.z),'
+                        ' = (`date$(gtime .z.z)),'
                         ' base = `$"{}", not sym like "*-*", '
                         '((`time$(ltime utc_datetime)) within (('
                         '`time${}:00); (`time${}:00)))'
@@ -183,7 +183,7 @@ class Rvol(object):
 
         avg_20d = Rvol.nearest_15m_20d_vol_avg(self, base)
 
-        rvol_20d = round((today / avg_20d), 2)
+        rvol_20d = round((today / avg_20d), 1)
 
         if np.isnan(rvol_20d):
 
@@ -195,9 +195,8 @@ class Rvol(object):
         """Rvolume in continuous previous 15 minutes"""
 
         td_15m = Rvol.rdb('-1# select sum volume from bar where '
-                          '(`date$utc_datetime) = (`date$.z.z), '
+                          '(`date$utc_datetime) = (`date$(gtime .z.z)), '
                           'base = `$"{}", not sym like "*-*",'
-                          ' (`time$utc_datetime) < (`time$.z.z),'
                           ' (`time$utc_datetime) > ((`time$.z.z) '
                           '- 00:15:00)'
                           .format(base))
@@ -249,7 +248,7 @@ class Rvol(object):
 
         try:
 
-            return round(td_15m / avg_15m_20d, 2)
+            return round(td_15m / avg_15m_20d, 1)
 
         except (ValueError, ZeroDivisionError):
 
@@ -582,7 +581,7 @@ class Alert(object):
         self.bases = ['GC', 'SI', 'HG', 'PA', 'PL', 'LE', 'HE', 'GF', 'CL',
                       'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'GE', 'ZL',
                       'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'MWE', 'ES', 'TF',
-                      'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX','FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
+                      'NQ', 'RTY', 'EMD', 'YM', 'Z', 'FESX', 'FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
                       'SB', 'CC', 'C', 'DX', '6E', '6J', '6C', '6M', '6A']
 
     @classmethod
@@ -755,7 +754,7 @@ class Alert(object):
 
         _ = Rvol.rdb('select sum volume by `date$utc_datetime'
                      ' from bar where (`date$utc_datetime)'
-                     ' = (`date$.z.z),'
+                     ' = (`date$(gtime .z.z)),'
                      ' base = `$"{}", not sym like "*-*", '
                      '((`time$(ltime utc_datetime)) within (('
                      '`time$07:00:00); (`time${}:00)))'
@@ -783,8 +782,8 @@ class Alert(object):
 
         hist_mean = cumsum.mean()
 
-        rvol = round(tday_cum / yday_vol, 2)
-        rvol20d = round(tday_cum / hist_mean, 2)
+        rvol = round(tday_cum / yday_vol, 1)
+        rvol20d = round(tday_cum / hist_mean, 1)
 
         return rvol, rvol20d
 

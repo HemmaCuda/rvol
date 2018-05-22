@@ -21,9 +21,9 @@ class Rvol(object):
     def __init__(self):
 
         self.bases = ['GC', 'SI', 'HG', 'PA', 'PL', 'LE', 'HE', 'GF', 'CL',
-                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'GE', 
-                      'ZL', 'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'ES', 'Z', 
-                      'R', 'MME', 'FOAT', 'RC', 'G', 'NQ', 'RTY', 'EMD', 
+                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'GE',
+                      'ZL', 'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'ES', 'Z',
+                      'R', 'MME', 'FOAT', 'RC', 'G', 'NQ', 'RTY', 'EMD',
                       'YM', 'Z', 'FESX', 'FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
                       'SB', 'CC', 'C', 'DX', '6E', '6J', '6C', '6M', '6A']
 
@@ -285,13 +285,13 @@ class Display(object):
 
         self.sectors = {"Metals": ["GC", "SI", "HG", "PL", "PA"],
                         "Energy": ["CL", "RB", "HO", "BRN", "G", "NG"],
-                        "Meats": ["LE", "HE", "GF"],                        
+                        "Meats": ["LE", "HE", "GF"],
                         "Grains": ["ZC", "ZW", "ZS", "ZM", "ZL", "KE"],
                         "Softs": ["SB", "CT", "KC", "RC", "CC", "C"],
                         "Currencies": ["DX", "6E", "6J", "6C", "6M", "6A"],
-                        "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL", "R", "FOAT", "FBTP", "GE"],                    
+                        "Bonds": ["ZN", "ZF", "ZB", "UB", "FGBL", "R", "FOAT", "FBTP", "GE"],
                         "US Equities": ["ES", "NQ", "YM", "RTY", "EMD"],
-                        "Equities": ["FESX", "FDAX","NIY", "Z", "MME"]}
+                        "Equities": ["FESX", "FDAX", "NIY", "Z", "MME"]}
 
     # set num_rows to length of the largest sector and initialize the
     # output_buffer
@@ -420,7 +420,7 @@ class Display(object):
         elif state == -1:
             return (Fore.RED + temp + Fore.WHITE)
         return temp
-    
+
 
 class Market(object):
     """Generic base/sym data"""
@@ -428,10 +428,10 @@ class Market(object):
     def __init__(self):
 
         self.bases = ['GC', 'SI', 'HG', 'PA', 'PL', 'LE', 'HE', 'GF', 'CL',
-                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'GE', 
-                      'ZL', 'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'ES', 'Z', 
-                      'R', 'MME', 'FOAT', 'RC', 'G', 'NQ', 'RTY', 'EMD', 
-                      'YM', 'Z', 'FESX','FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
+                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'GE',
+                      'ZL', 'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'ES', 'Z',
+                      'R', 'MME', 'FOAT', 'RC', 'G', 'NQ', 'RTY', 'EMD',
+                      'YM', 'Z', 'FESX', 'FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
                       'SB', 'CC', 'C', 'DX', '6E', '6J', '6C', '6M', '6A']
 
         self.front_months = Market.get_front_months(self)
@@ -529,8 +529,9 @@ class Market(object):
 
         # assumes last row in dailybar is last trade day
 
-        _ = Rvol.kdb('-1# select date, open, high, low, close'
-                     ' from dailybar where date within((.z.D - 4); (.z.D - 1))'
+        _ = Rvol.kdb('-1# select open: first price, high: max price, '
+                     'low: min price, close: last price by date'
+                     ' from trade where date within((.z.d-4); (.z.d))'
                      ', sym = `$"{}"'
                      .format(sym))
 
@@ -579,14 +580,13 @@ class Alert(object):
     """Multithreaded sms alert system"""
 
     def __init__(self):
-        
-        self.bases = ['GC', 'SI', 'HG', 'PA', 'PL', 'LE', 'HE', 'GF', 'CL',
-                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'GE', 
-                      'ZL', 'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'ES', 'Z', 
-                      'R', 'MME', 'FOAT', 'RC', 'G', 'NQ', 'RTY', 'EMD', 
-                      'YM', 'Z', 'FESX','FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
-                      'SB', 'CC', 'C', 'DX', '6E', '6J', '6C', '6M', '6A']
 
+        self.bases = ['GC', 'SI', 'HG', 'PA', 'PL', 'LE', 'HE', 'GF', 'CL',
+                      'RB', 'HO', 'BRN', 'NG', 'ZB', 'UB', 'ZF', 'ZN', 'GE',
+                      'ZL', 'ZM', 'ZS', 'ZC', 'CT', 'ZW', 'KE', 'ES', 'Z',
+                      'R', 'MME', 'FOAT', 'RC', 'G', 'NQ', 'RTY', 'EMD',
+                      'YM', 'Z', 'FESX', 'FDAX', 'NIY', 'FGBL', 'FBTP', 'KC',
+                      'SB', 'CC', 'C', 'DX', '6E', '6J', '6C', '6M', '6A']
 
     @classmethod
     def upd_price(cls, sym):

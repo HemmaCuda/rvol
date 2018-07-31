@@ -165,7 +165,7 @@ class Rvol(object):
 
             return 0
 
-    def nearest_15m_20d_vol_avg(self, base):
+    def hist_20d_vol_avg(self, base):
         """Calculates the 15m historical average over the last 20 days"""
 
         cur_sesh = list(Rvol.rvol_time().keys())[0]
@@ -178,12 +178,30 @@ class Rvol(object):
 
         return cut.groupby(by='date').sum().mean().item()
 
+    def nearest_5m_20d_vol_avg(self, base):
+        """Calculates the 15m historical average over the last 20 days"""
+
+        cur_sesh = list(Rvol.rvol_time().keys())[0]
+
+        dt_utc = datetime.datetime.utcnow().time()
+
+        utc = dt_utc.strftime('%H:%M')
+
+        last_5 = (dt_utc.replace(minute=(5 * (dt_utc.minute // 5)))
+                  .strftime('%H:%M'))
+
+        cut = self.kdb_data[base][cur_sesh].loc[
+            self.kdb_data[base][cur_sesh].index.levels[0]
+            .strftime('%H:%M') == last_5]
+
+        return cut.groupby(by='date').sum().mean().item()
+
     def rvol_20d(self, base):
         """Calculates the 20d Rvol to the nearest 5 minute bar"""
 
         today = Rvol.nearest_15m_vol(base)
 
-        avg_20d = Rvol.nearest_15m_20d_vol_avg(self, base)
+        avg_20d = Rvol.hist_20d_vol_avg(self, base)
 
         rvol_20d = round((today / avg_20d), 1)
 
@@ -193,17 +211,19 @@ class Rvol(object):
         return rvol_20d
 
     @classmethod
-    def last_15m_vol(cls, base):
+    def last_5m_vol(cls, base):
         """Rvolume in continuous previous 15 minutes"""
 
         td_15m = Rvol.rdb('-1# select sum volume from bar where '
                           '(`date$utc_datetime) = (`date$(gtime .z.z)), '
                           'base = `$"{}", not sym like "*-*",'
                           ' (`time$utc_datetime) > ((`time$.z.z) '
-                          '- 00:15:00)'
+                          '- 00:05:00)'
                           .format(base))
 
         return td_15m['volume'].item()
+
+    # Depricated
 
     @classmethod
     def last_20d_15m_vol(cls, base):
@@ -216,7 +236,7 @@ class Rvol(object):
                         ';{}), base=`$"{}", not sym like'
                         ' "*-*", (`time$utc_datetime) < '
                         '(`time$.z.z) ,(`time$utc_datetime'
-                        ') > ((`time$.z.z) - 00:15:00), null trade_type'
+                        ') > ((`time$.z.z) - 00:05:00), null trade_type'
                         .format(first, last, base))
 
         try:
@@ -240,17 +260,16 @@ class Rvol(object):
 
         return first_date, last_date
 
-    @classmethod
-    def rvol_now(cls, base):
+    def rvol_now(self, base):
         """Rolling 15m volume vs average of last 20 days"""
 
-        td_15m = Rvol.last_15m_vol(base)
+        td_5m = Rvol.last_5m_vol(base)
 
-        avg_15m_20d = Rvol.last_20d_15m_vol(base)
+        avg_5m_20d = Rvol.nearest_5m_20d_vol_avg(self, base)
 
         try:
 
-            return round(td_15m / avg_15m_20d, 1)
+            return round(td_5m / avg_5m_20d, 1)
 
         except (ValueError, ZeroDivisionError):
 
@@ -263,7 +282,7 @@ class Rvol(object):
 
         for base in self.bases:
 
-            rvol_now[base] = Rvol.rvol_now(base)
+            rvol_now[base] = Rvol.rvol_now(self, base)
 
         return rvol_now
 
@@ -306,6 +325,11 @@ class Display(object):
         column_names = ""
         COLUMN_WIDTH = 18
         INTENSITY_FACTOR = 1.3
+
+        for key, value in rvol_now.items():
+
+            if value != value:
+                rvol_now[key] = 0
 
         for key in self.sectors:
 

@@ -368,8 +368,8 @@ class Display(object):
                 t2 += ' ' * (COLUMN_WIDTH - len(t2))
 
                 if state is not None:
-                    t1 = Display.format_colors(states[symbol], t1)
-                    t2 = Display.format_colors(states[symbol], t2)
+                    t1 = Display.format_colors(state, t1)
+                    t2 = Display.format_colors(state, t2)
 
                 output_buffer[i * 2] += t1
                 output_buffer[(i * 2) + 1] += t2
@@ -389,8 +389,14 @@ class Display(object):
         # Top X Now - format each line and add to the output buffer
         for i in range(0, num_rows):
 
+            state = None
             symbol = rvol_sort[i]
             rvol_intensity = min(5, int(rvol_now[symbol] // INTENSITY_FACTOR))
+
+            try:
+                state = states[symbol]
+            except KeyError:
+                pass
 
             temp = (rvol_sort[i]
                     + ' '
@@ -402,7 +408,9 @@ class Display(object):
                     + str(rvol_now[symbol]))
 
             temp += ' ' * (COLUMN_WIDTH - len(temp))
-            temp = Display.format_colors(states[symbol], temp)
+
+            if state is not None:
+                temp = Display.format_colors(state, temp)
 
             output_buffer[i] += temp
 
@@ -412,8 +420,14 @@ class Display(object):
         # Top X Session - format each line and add to the output buffer
         for i in range(0, num_rows):
 
+            state = None
             symbol = rvol_sort[i]
             rvol_intensity = min(5, int(rvol_20d[symbol] // INTENSITY_FACTOR))
+
+            try:
+                state = states[symbol]
+            except KeyError:
+                pass
 
             temp = (rvol_sort[i]
                     + ' '
@@ -425,7 +439,8 @@ class Display(object):
                     + str(rvol_20d[symbol]))
 
             temp += ' ' * (COLUMN_WIDTH - len(temp))
-            temp = Display.format_colors(states[symbol], temp)
+            if state is not None:
+                temp = Display.format_colors(state, temp)
 
             output_buffer[i] += temp
 
